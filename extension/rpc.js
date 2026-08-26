@@ -29,7 +29,7 @@ export const VERTICAL_DETAIL_FIELDS = [
   "Метод_Ответственный"
 ];
 
-const TECHNICAL_HEADERS = /^(idParent|dimension|name\d+)$/i;
+const TECHNICAL_HEADERS = /^(idParent|dimension|name\d+|label)$/i;
 const HEADER_LABELS = {
   id: "Метод",
   Метод_Метод: "Метод",

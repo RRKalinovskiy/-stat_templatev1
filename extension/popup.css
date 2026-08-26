@@ -81,6 +81,10 @@ html, body {
   font-size: 12px;
   line-height: 1.45;
 }
+.hint a {
+  color: var(--accent);
+  word-break: break-all;
+}
 
 .card, .stand-card, .filter-item {
   background: var(--card);

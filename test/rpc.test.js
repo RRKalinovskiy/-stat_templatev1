@@ -292,6 +292,7 @@ test("tree-shaped GetReport rows drop service columns", () => {
         "",
         true,
         ["Метод_Метод", "CoreV3.Collecting"],
+        "leaf",
         "Панов М.В.",
         5488,
         18,
@@ -307,6 +308,7 @@ test("tree-shaped GetReport rows drop service columns", () => {
       { n: "idParent$" },
       { n: "dimension" },
       { n: "name0" },
+      { n: "label" },
       { n: "ОтветственныйЗаМетод" },
       { n: "Количество вызовов" },
       { n: "Количество ошибок" },
@@ -320,6 +322,7 @@ test("tree-shaped GetReport rows drop service columns", () => {
   const table = mapDisplayColumns(parsed.headers, parsed.rows);
   assert.equal(table.headers.includes("idParent"), false);
   assert.equal(table.headers.includes("name0"), false);
+  assert.equal(table.headers.includes("label"), false);
   assert.equal(table.headers.includes("dimension"), false);
   assert.equal(table.headers[0], "Метод");
   assert.equal(table.headers[1], "Ответственный");
