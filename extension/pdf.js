@@ -1,8 +1,23 @@
 function wrapText(ctx, text, maxWidth) {
-  const words = String(text).split(/\s+/);
+  const tokens = String(text).split(/\s+/);
   const lines = [];
   let line = "";
-  for (const w of words) {
+  const takeChars = (word) => {
+    let rest = word;
+    while (rest && ctx.measureText(rest).width > maxWidth && rest.length > 1) {
+      let cut = rest.length;
+      while (cut > 1 && ctx.measureText(rest.slice(0, cut)).width > maxWidth) cut--;
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      lines.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    return rest;
+  };
+  for (const raw of tokens) {
+    const w = takeChars(raw);
     const test = line ? `${line} ${w}` : w;
     if (ctx.measureText(test).width <= maxWidth) line = test;
     else {
@@ -12,6 +27,22 @@ function wrapText(ctx, text, maxWidth) {
   }
   if (line) lines.push(line);
   return lines.length ? lines : [""];
+}
+
+function isNumericText(value) {
+  const v = String(value ?? "").trim();
+  return v === "" || /^-?[\d\s]+([.,]\d+)?$/.test(v);
+}
+
+function columnLayout(ctx, headers, rows) {
+  ctx.font = "12px sans-serif";
+  return headers.map((h, i) => {
+    const numeric = rows.length ? rows.every((r) => isNumericText(r[i])) : /Количество|продолжительность|мс/i.test(h);
+    const sample = [h, ...rows.slice(0, 40).map((r) => String(r[i] ?? ""))];
+    const max = sample.reduce((m, s) => Math.max(m, ctx.measureText(s).width), 0);
+    if (numeric) return { width: Math.min(150, Math.max(92, max + 20)), numeric: true };
+    return { width: Math.min(380, Math.max(160, max + 24)), numeric: false };
+  });
 }
 
 function createCanvas(width, height) {
@@ -27,12 +58,11 @@ async function canvasToJpeg(canvas) {
 }
 
 async function renderTablePage(title, headers, rows, pageNo, pageCount) {
-  const colCount = headers.length;
-  const methodW = 300;
-  const numW = 118;
-  const width = methodW + numW * Math.max(colCount - 1, 0) + 32;
-  const rowH = 30;
-  const headerH = 48;
+  const probe = createCanvas(8, 8).getContext("2d");
+  const cols = columnLayout(probe, headers, rows);
+  const width = cols.reduce((s, c) => s + c.width, 0) + 32;
+  const rowH = 32;
+  const headerH = 58;
   const titleH = 40;
   const height = titleH + headerH + Math.max(rows.length, 1) * rowH + 28;
 
@@ -46,19 +76,17 @@ async function renderTablePage(title, headers, rows, pageNo, pageCount) {
   ctx.fillText(title, 16, 26);
   ctx.fillStyle = "#9aa8b8";
   ctx.font = "11px sans-serif";
-  ctx.fillText(`${pageNo} / ${pageCount}`, width - 48, 26);
+  ctx.fillText(`${pageNo} / ${pageCount}`, width - 52, 26);
 
   const xs = [16];
-  xs.push(16 + methodW);
-  for (let i = 2; i < colCount; i++) xs.push(xs[i - 1] + numW);
-  const widths = [methodW, ...Array(Math.max(colCount - 1, 0)).fill(numW)];
+  for (let i = 0; i < cols.length - 1; i++) xs.push(xs[i] + cols[i].width);
 
   ctx.fillStyle = "#26303c";
   ctx.fillRect(8, titleH, width - 16, headerH);
   ctx.fillStyle = "#c5d0db";
   ctx.font = "600 11px sans-serif";
   headers.forEach((h, i) => {
-    wrapText(ctx, h, widths[i] - 8).slice(0, 3).forEach((ln, li) => {
+    wrapText(ctx, h, cols[i].width - 10).slice(0, 4).forEach((ln, li) => {
       ctx.fillText(ln, xs[i], titleH + 16 + li * 12);
     });
   });
@@ -70,12 +98,12 @@ async function renderTablePage(title, headers, rows, pageNo, pageCount) {
     ctx.fillRect(8, y, width - 16, rowH);
     ctx.fillStyle = "#e8edf2";
     row.forEach((cell, i) => {
-      const text = String(cell ?? "");
-      if (i === 0) {
-        ctx.fillText(wrapText(ctx, text, widths[i] - 8)[0], xs[i], y + 19);
-      } else {
+      const text = wrapText(ctx, String(cell ?? ""), cols[i].width - 10)[0];
+      if (cols[i].numeric) {
         const tw = ctx.measureText(text).width;
-        ctx.fillText(text, xs[i] + widths[i] - 12 - tw, y + 19);
+        ctx.fillText(text, xs[i] + cols[i].width - 14 - tw, y + 20);
+      } else {
+        ctx.fillText(text, xs[i], y + 20);
       }
     });
   });

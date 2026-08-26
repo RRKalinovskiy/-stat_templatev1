@@ -16,6 +16,27 @@ export const EMPTY_FILTER_TEMPLATE = {
   displayType: "Таблица"
 };
 
+/** Fixed schema of legacy «Вертикальная детализация» (record format 6). Extra dim ids from UI JSON must not be added — they cause ВОС. */
+export const VERTICAL_DETAIL_FIELDS = [
+  "WEB-Сервис_Приложение",
+  "WEB-Сервис_Семейство",
+  "WEB-Сервис_Сервис",
+  "WEB-Сервис_СистемноеИмя",
+  "time",
+  "БилдСервиса_БилдСервиса",
+  "Метод_Метод",
+  "Метод_МетодПсевдоним",
+  "Метод_Ответственный"
+];
+
+const TECHNICAL_HEADERS = /^(idParent|dimension|name\d+)$/i;
+const HEADER_LABELS = {
+  id: "Метод",
+  Метод_Метод: "Метод",
+  Метод_Ответственный: "Ответственный",
+  ОтветственныйЗаМетод: "Ответственный"
+};
+
 export function defaultStands() {
   return structuredClone(DEFAULT_STANDS);
 }
@@ -151,9 +172,20 @@ export function buildNavigation(page, pageSize = 50) {
   ]);
 }
 
+function stringifyDimValue(v) {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return stringifyDimValue(v[0]);
+  if (typeof v === "object") {
+    return stringifyDimValue(v.id ?? v.name ?? v.value ?? v.Название ?? v.d);
+  }
+  return String(v);
+}
+
 export function normalizeDimValues(values) {
   if (!Array.isArray(values) || values.length === 0) return null;
-  return values.map((v) => (v == null ? "" : String(v)));
+  const out = values.map(stringifyDimValue).filter((v) => v !== "");
+  return out.length ? out : null;
 }
 
 function isTimeDimension(d) {
@@ -242,10 +274,11 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
   );
 
   const emptyRec = rec(7, [], []);
+  const dimById = Object.fromEntries(dimensions.map((d) => [d.id, d]));
   const vertical = rec(
     6,
-    dimensions.map((d) => verticalDimRecord(d, emptyRec)),
-    dimensions.map((d) => ({ t: "Запись", n: d.id }))
+    VERTICAL_DETAIL_FIELDS.map((id) => verticalDimRecord(dimById[id], emptyRec)),
+    VERTICAL_DETAIL_FIELDS.map((id) => ({ t: "Запись", n: id }))
   );
 
   const charsAnalysis = rec(
@@ -272,7 +305,7 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       f.cube ?? "",
       rs(3, dimD, dimS),
       f.displayType ?? "Таблица",
-      f.idParent ?? null,
+      typeof f.idParent === "string" ? f.idParent : null,
       periodRs,
       String(f.version ?? "1")
     ],
@@ -445,9 +478,9 @@ export function parseReportTable(result) {
   if (!found) return { headers: [], rows: [], hasMore: false };
   const headers = (found.s || []).map((c) => c.n || c.id || "");
   const rows = (found.d || []).map((row) => {
-    if (Array.isArray(row)) return row;
-    if (row && Array.isArray(row.d)) return row.d;
-    return headers.map((h) => row?.[h]);
+    if (Array.isArray(row)) return row.map(flattenCell);
+    if (row && Array.isArray(row.d)) return row.d.map(flattenCell);
+    return headers.map((h) => flattenCell(row?.[h]));
   });
   return { headers, rows, hasMore: detectHasMore(result, rows.length) };
 }
@@ -481,32 +514,33 @@ function findNamedValue(node, name, depth = 0) {
   return undefined;
 }
 
-function findRecordset(node, depth = 0) {
-  if (!node || depth > 8) return null;
-  if (node._type === "recordset" && Array.isArray(node.d) && node.s) return node;
-  if (Array.isArray(node.d) && Array.isArray(node.s) && node.d.length && Array.isArray(node.d[0])) {
-    return node;
-  }
+function scoreRecordset(node) {
+  const names = (node.s || []).map((c) => c.n || c.id || "");
+  let score = (node.d || []).length + names.length;
+  if (names.some((n) => /Количество|продолжительность/i.test(n))) score += 10000;
+  if (names.includes("id") || names.includes("Метод_Метод")) score += 50;
+  return score;
+}
+
+function collectRecordsets(node, depth, out) {
+  if (!node || depth > 8) return;
+  if (node._type === "recordset" && Array.isArray(node.d) && node.s) out.push(node);
+  else if (Array.isArray(node.d) && Array.isArray(node.s) && node.d.length && Array.isArray(node.d[0])) out.push(node);
   if (Array.isArray(node)) {
-    for (const item of node) {
-      const found = findRecordset(item, depth + 1);
-      if (found) return found;
-    }
+    for (const item of node) collectRecordsets(item, depth + 1, out);
   } else if (typeof node === "object") {
-    for (const key of ["result", "d", "data", "Таблица"]) {
-      if (key in node) {
-        const found = findRecordset(node[key], depth + 1);
-        if (found) return found;
-      }
-    }
     for (const v of Object.values(node)) {
-      if (v && typeof v === "object") {
-        const found = findRecordset(v, depth + 1);
-        if (found) return found;
-      }
+      if (v && typeof v === "object") collectRecordsets(v, depth + 1, out);
     }
   }
-  return null;
+}
+
+function findRecordset(node) {
+  const found = [];
+  collectRecordsets(node, 0, found);
+  if (!found.length) return null;
+  found.sort((a, b) => scoreRecordset(b) - scoreRecordset(a));
+  return found[0];
 }
 
 export function extractSid(result) {
@@ -528,20 +562,67 @@ export function methodDisplayName(rawMethod, rawOwner = "") {
   return method;
 }
 
-function formatCell(value, row, headers) {
+function flattenCell(value) {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) {
+    const parts = value.map(flattenCell).filter((v) => v !== "" && v !== false);
+    if (parts.length === 2 && typeof parts[0] === "string" && /^[A-Za-zА-Яа-я_]+$/.test(parts[0])) {
+      return parts[1];
+    }
+    return parts[parts.length - 1] ?? "";
+  }
+  if (typeof value === "object") {
+    if (Array.isArray(value.d)) return flattenCell(value.d);
+    return flattenCell(value.id ?? value.name ?? value.n ?? value.value);
+  }
+  return String(value);
+}
+
+function isTechnicalHeader(name) {
+  const h = String(name || "");
+  return TECHNICAL_HEADERS.test(h) || /^idParent[@$]?$/.test(h);
+}
+
+function headerLabel(name) {
+  return HEADER_LABELS[name] || String(name).replace(/_/g, " ");
+}
+
+function columnHasValues(rows, index) {
+  return rows.some((row) => {
+    const v = row[index];
+    return v !== "" && v != null && v !== false;
+  });
+}
+
+function formatCell(value, row, sourceHeaders) {
   if (typeof value === "string" && value.includes("$$")) {
-    const ownerIdx = headers.findIndex((h) => /Ответственный/.test(h));
+    const ownerIdx = sourceHeaders.findIndex((h) => /Ответственный/.test(h));
     const owner = ownerIdx >= 0 ? row[ownerIdx] : "";
     return methodDisplayName(value, owner);
   }
+  if (typeof value === "boolean") return value ? "да" : "";
   if (typeof value === "number") return formatNumber(value);
   if (value == null) return "";
   return String(value);
 }
 
 export function mapDisplayColumns(headers, rows) {
-  const outRows = rows.map((row) => headers.map((_, i) => formatCell(row[i], row, headers)));
-  return { headers: [...headers], rows: outRows };
+  const keep = headers.map((h, i) => {
+    if (isTechnicalHeader(h)) return false;
+    if (h === "id") return columnHasValues(rows, i);
+    if ((h === "Метод_Метод" || h === "name0") && headers.includes("id") && columnHasValues(rows, headers.indexOf("id"))) {
+      return false;
+    }
+    if (!columnHasValues(rows, i) && !/Количество|продолжительность/i.test(h)) return false;
+    return true;
+  });
+  const sourceIdx = headers.map((_, i) => i).filter((i) => keep[i]);
+  const outHeaders = sourceIdx.map((i) => headerLabel(headers[i]));
+  const outRows = rows.map((row) =>
+    sourceIdx.map((i) => formatCell(row[i], row, headers))
+  );
+  return { headers: outHeaders, rows: outRows };
 }
 
 export function isPendingResult(json) {

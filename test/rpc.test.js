@@ -12,6 +12,7 @@ import {
   reportFileName,
   extractSid,
   EMPTY_FILTER_TEMPLATE,
+  VERTICAL_DETAIL_FIELDS,
   authServiceUrl,
   reportServiceUrl,
   rpcCallUrl,
@@ -101,12 +102,14 @@ test("owner dimension with UI top:100 still sends Filter, not Position", () => {
   assert.equal(ownerRec.f, 9);
 });
 
-test("empty filter template does not inject a cube or dimensions", () => {
+test("empty filter template still uses the fixed vertical detail schema", () => {
   const params = buildGetReportParams(EMPTY_FILTER_TEMPLATE, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
   assert.equal(params.Фильтр.d[0].d[3], "");
   assert.equal(params.Фильтр.d[0].d[4].d.length, 0);
   assert.equal(params.Фильтр.d[0].d[1].d.length, 0);
-  assert.equal(params.Фильтр.d[1].d[2].d.length, 0);
+  const vertical = params.Фильтр.d[1].d[2];
+  assert.deepEqual(vertical.s.map((c) => c.n), VERTICAL_DETAIL_FIELDS);
+  assert.equal(vertical.d.length, VERTICAL_DETAIL_FIELDS.length);
 });
 
 test("numbers use space thousands separator", () => {
@@ -131,8 +134,8 @@ test("parse recordset and map columns like the stats table", () => {
   };
   const parsed = parseReportTable(result);
   const table = mapDisplayColumns(parsed.headers, parsed.rows);
-  assert.equal(table.headers[0], "Метод_Метод");
-  assert.equal(table.headers[1], "Метод_Ответственный");
+  assert.equal(table.headers[0], "Метод");
+  assert.equal(table.headers[1], "Ответственный");
   assert.equal(table.headers[2], "Количество вызовов");
   assert.equal(table.rows[0][0], "CoreV3.Collecting");
   assert.equal(table.rows[0][2], "6 364");
@@ -241,14 +244,60 @@ test("custom cube filter maps empty values, excluded aliases, and object list", 
   assert.equal(aliasRow[5], true);
   const vertical = params.Фильтр.d[1].d[2];
   const names = vertical.s.map((c) => c.n);
-  assert.ok(names.includes("Метод_Объект"));
-  assert.equal(names.includes("Метод_Ответственный"), false);
-  const objectRec = vertical.d[names.indexOf("Метод_Объект")];
-  assert.deepEqual(objectRec.d[0], ["Trigger", "Service"]);
+  assert.deepEqual(names, VERTICAL_DETAIL_FIELDS);
+  assert.equal(names.includes("Метод_Объект"), false);
+  assert.equal(names.includes("WEB-Сервис_Локальный стенд"), false);
+  const objectRow = dimRows.find((r) => r[0] === "Метод_Объект");
+  assert.deepEqual(objectRow[3], ["Trigger", "Service"]);
   const aliasRec = vertical.d[names.indexOf("Метод_МетодПсевдоним")];
   assert.equal(aliasRec.s.some((c) => c.n === "Excluded"), true);
-  const localRec = vertical.d[names.indexOf("WEB-Сервис_Локальный стенд")];
-  assert.deepEqual(localRec.d[0], ["0"]);
+  const localRow = dimRows.find((r) => r[0] === "WEB-Сервис_Локальный стенд");
+  assert.deepEqual(localRow[3], ["0"]);
+});
+
+test("tree-shaped GetReport rows drop service columns", () => {
+  const result = {
+    d: [
+      [
+        "CoreV3.Collecting (Панов М.В.)",
+        "",
+        "",
+        "",
+        true,
+        ["Метод_Метод", "CoreV3.Collecting"],
+        "Панов М.В.",
+        5488,
+        18,
+        9884223,
+        19954,
+        1801.06
+      ]
+    ],
+    s: [
+      { n: "id" },
+      { n: "idParent" },
+      { n: "idParent@" },
+      { n: "idParent$" },
+      { n: "dimension" },
+      { n: "name0" },
+      { n: "ОтветственныйЗаМетод" },
+      { n: "Количество вызовов" },
+      { n: "Количество ошибок" },
+      { n: "Общая продолжительность (мс)" },
+      { n: "Максимальная продолжительность (мс)" },
+      { n: "Средняя продолжительность (мс)" }
+    ],
+    _type: "recordset"
+  };
+  const parsed = parseReportTable(result);
+  const table = mapDisplayColumns(parsed.headers, parsed.rows);
+  assert.equal(table.headers.includes("idParent"), false);
+  assert.equal(table.headers.includes("name0"), false);
+  assert.equal(table.headers.includes("dimension"), false);
+  assert.equal(table.headers[0], "Метод");
+  assert.equal(table.headers[1], "Ответственный");
+  assert.equal(table.rows[0][0], "CoreV3.Collecting (Панов М.В.)");
+  assert.equal(table.rows[0][2], "5 488");
 });
 
 test("extract sid from auth record", () => {
