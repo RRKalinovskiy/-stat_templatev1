@@ -45,7 +45,7 @@ function renderStands() {
     card.className = "stand-card";
     card.innerHTML = `
       <div class="stand-title">
-        <span>${stand.title} · ${stand.host}</span>
+        <span>${stand.title} <span class="host">${stand.host}</span></span>
         <span class="badge ${stand.synced ? "ok" : stand.lastError ? "err" : ""}">
           ${stand.synced ? "синхронизирован" : stand.lastError ? "ошибка" : "нет сессии"}
         </span>
