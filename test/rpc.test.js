@@ -32,6 +32,14 @@ test("RPC period uses Moscow offset +03", () => {
   assert.deepEqual(period, ["2026-08-25 14:10:00+03", "2026-08-26 14:10:00+03"]);
   assert.equal(params.Навигация.d[2], 0);
   assert.equal(params.Навигация.d[1], 50);
+  const vertical = params.Фильтр.d[1].d[2];
+  const ownerRec = vertical.d[8];
+  assert.deepEqual(ownerRec.s[0].n, "Filter");
+  const filterValues = ownerRec.d[0];
+  assert.equal(Array.isArray(filterValues), true);
+  assert.equal(Array.isArray(filterValues[0]), false);
+  assert.equal(typeof filterValues[0], "string");
+  assert.ok(filterValues.includes("Панов М.В."));
 });
 
 test("numbers use space thousands separator", () => {

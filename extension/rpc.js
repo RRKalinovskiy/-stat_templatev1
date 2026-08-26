@@ -175,6 +175,10 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
   const dimById = Object.fromEntries((f.dimensions || []).map((d) => [d.id, d]));
   const methodDim = dimById["Метод_Метод"];
   const ownerDim = dimById["Метод_Ответственный"];
+  const ownerNames = (ownerDim?.values || [])
+    .flat(Infinity)
+    .filter((v) => v != null && v !== "")
+    .map((v) => String(v));
 
   const vertical = rec(
     6,
@@ -190,7 +194,7 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
         { t: "Число целое", n: "Top" }
       ]),
       emptyRec,
-      rec(9, [ownerDim?.values || []], [{ t: { n: "Массив", t: "Строка" }, n: "Filter" }])
+      rec(9, [ownerNames], [{ t: { n: "Массив", t: "Строка" }, n: "Filter" }])
     ],
     [
       { t: "Запись", n: "WEB-Сервис_Приложение" },
