@@ -219,7 +219,11 @@ $("btn-download").addEventListener("click", async () => {
   const url = URL.createObjectURL(blob);
   const filename = `stats-report-${Date.now()}.pdf`;
   try {
-    await chrome.downloads.download({ url, filename, saveAs: true });
+    if (typeof chrome !== "undefined" && chrome.downloads?.download) {
+      await chrome.downloads.download({ url, filename, saveAs: true });
+    } else {
+      throw new Error("no downloads api");
+    }
   } catch {
     const a = document.createElement("a");
     a.href = url;
