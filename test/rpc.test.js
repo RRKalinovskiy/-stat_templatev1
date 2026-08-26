@@ -27,6 +27,13 @@ test("period is replaced in filter JSON", () => {
   assert.equal(next.period[0].end, "2026-08-26T11:10:00.000Z");
 });
 
+test("applyPeriod does not crash on missing filter", () => {
+  assert.throws(() => applyPeriod(undefined, new Date(), new Date()), /Фильтр не задан/);
+  const wrapped = applyPeriod({ filter: { cube: "Вызовы", characteristics: [] } }, new Date("2026-08-25T00:00:00Z"), new Date("2026-08-26T00:00:00Z"));
+  assert.equal(wrapped.cube, "Вызовы");
+  assert.ok(wrapped.period);
+});
+
 test("RPC period uses Moscow offset +03", () => {
   const start = new Date("2026-08-25T11:10:00.000Z");
   assert.equal(formatRpcDateTime(start), "2026-08-25 14:10:00+03");
@@ -146,6 +153,43 @@ test("GetReport params use the passed filter characteristics, not the default er
   assert.equal(chars.length, 1);
   assert.equal(chars[0][0], "Количество вызовов");
   assert.notEqual(chars[0][0], "Количество ошибок");
+});
+
+test("custom cube filter maps empty values, excluded aliases, and object list", () => {
+  const custom = {
+    cube: "Вызовы",
+    comparePeriodEnabled: false,
+    dimensions: [
+      { id: "Метод_Метод", isAggregated: true, top: 100 },
+      { id: "WEB-Сервис_Приложение", isAggregated: false, values: [] },
+      { id: "Метод_Объект", isAggregated: false, values: ["Trigger", "Service"] },
+      { id: "WEB-Сервис_Локальный стенд", isAggregated: false, values: [0] },
+      { id: "time", mode: "all_days", timePeriod: { start: "00:00", end: "23:59" }, timeStep: "ten_minute", isAggregated: false },
+      { id: "Метод_МетодПсевдоним", isAggregated: false, values: ["Service.ListIterator"], excluded: true }
+    ],
+    characteristics: [{ id: "Количество ошибок", range: { start: 1 }, order: "desc" }],
+    version: "1",
+    displayType: "Таблица"
+  };
+  const params = buildGetReportParams(custom, new Date("2026-08-24T21:00:00.000Z"), new Date("2026-08-26T13:50:00.000Z"));
+  const dimRows = params.Фильтр.d[0].d[4].d;
+  const appRow = dimRows.find((r) => r[0] === "WEB-Сервис_Приложение");
+  assert.equal(appRow[3], null);
+  const timeRow = dimRows.find((r) => r[0] === "time");
+  assert.equal(timeRow[1], true);
+  assert.equal(timeRow[10], "ten_minute");
+  const aliasRow = dimRows.find((r) => r[0] === "Метод_МетодПсевдоним");
+  assert.equal(aliasRow[5], true);
+  const vertical = params.Фильтр.d[1].d[2];
+  const names = vertical.s.map((c) => c.n);
+  assert.ok(names.includes("Метод_Объект"));
+  assert.equal(names.includes("Метод_Ответственный"), false);
+  const objectRec = vertical.d[names.indexOf("Метод_Объект")];
+  assert.deepEqual(objectRec.d[0], ["Trigger", "Service"]);
+  const aliasRec = vertical.d[names.indexOf("Метод_МетодПсевдоним")];
+  assert.equal(aliasRec.s.some((c) => c.n === "Excluded"), true);
+  const localRec = vertical.d[names.indexOf("WEB-Сервис_Локальный стенд")];
+  assert.deepEqual(localRec.d[0], ["0"]);
 });
 
 test("extract sid from auth record", () => {

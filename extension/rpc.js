@@ -196,9 +196,40 @@ export function buildNavigation(page, pageSize = 50) {
   ]);
 }
 
+export function normalizeDimValues(values) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  return values.map((v) => (v == null ? "" : String(v)));
+}
+
+function isTimeDimension(d) {
+  return d.isTimeDim === true || d.id === "time";
+}
+
+function verticalDimRecord(d, emptyRec) {
+  if (!d || isTimeDimension(d)) return emptyRec;
+  const values = normalizeDimValues(d.values);
+  const fields = [];
+  const schema = [];
+  if (d.isAggregated || d.top != null) {
+    fields.push(1, d.top ?? 100);
+    schema.push({ t: "Число целое", n: "Position" }, { t: "Число целое", n: "Top" });
+  }
+  if (values) {
+    fields.push(values);
+    schema.push({ t: { n: "Массив", t: "Строка" }, n: "Filter" });
+  }
+  if (d.excluded === true) {
+    fields.push(true);
+    schema.push({ t: "Логическое", n: "Excluded" });
+  }
+  if (!schema.length) return emptyRec;
+  return rec(7, fields, schema);
+}
+
 export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50) {
   const f = applyPeriod(filter, start, end);
   const tz = f.TZ ?? 3;
+  const dimensions = f.dimensions || [];
 
   const charS = [
     { t: "Строка", n: "id" },
@@ -220,13 +251,13 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
     { t: "JSON-объект", n: "timePeriod" },
     { t: "Строка", n: "timeStep" }
   ];
-  const dimD = (f.dimensions || []).map((d) => [
+  const dimD = dimensions.map((d) => [
     d.id,
-    d.isTimeDim ?? null,
+    isTimeDimension(d) ? true : d.isTimeDim ?? null,
     d.isAggregated ?? false,
-    d.values ?? null,
-    d.valuesCompare ?? null,
-    d.excluded ?? null,
+    normalizeDimValues(d.values),
+    normalizeDimValues(d.valuesCompare),
+    d.excluded === true ? true : d.excluded ?? null,
     d.excludedCompare ?? null,
     d.top ?? null,
     d.mode ?? null,
@@ -244,41 +275,10 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
   );
 
   const emptyRec = rec(7, [], []);
-  const dimById = Object.fromEntries((f.dimensions || []).map((d) => [d.id, d]));
-  const methodDim = dimById["Метод_Метод"];
-  const ownerDim = dimById["Метод_Ответственный"];
-  const ownerNames = (ownerDim?.values || [])
-    .flat(Infinity)
-    .filter((v) => v != null && v !== "")
-    .map((v) => String(v));
-
   const vertical = rec(
     6,
-    [
-      emptyRec,
-      emptyRec,
-      emptyRec,
-      emptyRec,
-      emptyRec,
-      emptyRec,
-      rec(8, [1, methodDim?.top ?? 100], [
-        { t: "Число целое", n: "Position" },
-        { t: "Число целое", n: "Top" }
-      ]),
-      emptyRec,
-      rec(9, [ownerNames], [{ t: { n: "Массив", t: "Строка" }, n: "Filter" }])
-    ],
-    [
-      { t: "Запись", n: "WEB-Сервис_Приложение" },
-      { t: "Запись", n: "WEB-Сервис_Семейство" },
-      { t: "Запись", n: "WEB-Сервис_Сервис" },
-      { t: "Запись", n: "WEB-Сервис_СистемноеИмя" },
-      { t: "Запись", n: "time" },
-      { t: "Запись", n: "БилдСервиса_БилдСервиса" },
-      { t: "Запись", n: "Метод_Метод" },
-      { t: "Запись", n: "Метод_МетодПсевдоним" },
-      { t: "Запись", n: "Метод_Ответственный" }
-    ]
+    dimensions.map((d) => verticalDimRecord(d, emptyRec)),
+    dimensions.map((d) => ({ t: "Запись", n: d.id }))
   );
 
   const charsAnalysis = rec(
