@@ -131,6 +131,23 @@ test("mergeStands adds pre-test without dropping saved logins", () => {
   assert.equal(authServiceUrl(preTest.host), "https://pre-test-cloud.sbis.ru/auth/service/");
 });
 
+test("GetReport params use the passed filter characteristics, not the default errors filter", () => {
+  const custom = {
+    TZ: 3,
+    cube: "Вызовы",
+    displayType: "Таблица",
+    version: "1",
+    comparePeriodEnabled: false,
+    characteristics: [{ id: "Количество вызовов", order: "desc", range: {} }],
+    dimensions: [{ id: "Метод_Метод", isAggregated: true, top: 10 }]
+  };
+  const params = buildGetReportParams(custom, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
+  const chars = params.Фильтр.d[0].d[1].d;
+  assert.equal(chars.length, 1);
+  assert.equal(chars[0][0], "Количество вызовов");
+  assert.notEqual(chars[0][0], "Количество ошибок");
+});
+
 test("extract sid from auth record", () => {
   const result = { d: ["abc-sid", true], s: [{ n: "sid" }, { n: "ok" }], _type: "record" };
   assert.equal(extractSid(result), "abc-sid");

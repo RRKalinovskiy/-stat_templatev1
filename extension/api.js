@@ -11,7 +11,7 @@ import {
   reportCallUrls,
   rpcBody
 } from "./rpc.js";
-import { loadState, saveStands } from "./storage.js";
+import { loadState, saveStands, parseFilterJson } from "./storage.js";
 
 const PAGE_SIZE = 50;
 
@@ -134,11 +134,21 @@ function reportHeaders(stand) {
   return headers;
 }
 
-export async function getReport({ standId, filter, start, end, onStatus }) {
-  const { stands } = await loadState();
+export async function getReport({ standId, filter, filterId, start, end, onStatus }) {
+  const { stands, filters } = await loadState();
   const stand = stands.find((s) => s.id === standId);
   if (!stand) throw new Error("Стенд не найден");
   if (!stand.synced) throw new Error("Сначала синхронизируйте стенд");
+
+  let filterJson = filter;
+  if (filterId) {
+    const saved = filters.find((f) => f.id === filterId);
+    if (!saved) throw new Error("Выбранный фильтр не найден");
+    filterJson = parseFilterJson(saved.json);
+  } else {
+    filterJson = parseFilterJson(filter);
+  }
+  if (!filterJson) throw new Error("Некорректный JSON фильтра");
 
   const urls = reportCallUrls(stand.host);
   const startDate = new Date(start);
@@ -151,7 +161,7 @@ export async function getReport({ standId, filter, start, end, onStatus }) {
 
   while (page < 40) {
     onStatus?.(`Запрос отчёта, страница ${page + 1}…`);
-    const params = buildGetReportParams(filter, startDate, endDate, page, PAGE_SIZE);
+    const params = buildGetReportParams(filterJson, startDate, endDate, page, PAGE_SIZE);
     let last = await rpcFetchWithFallback(urls, "CommonStatistic.GetReport", params, reportHeaders(stand));
     lastUrl = last.requestUrl;
 
@@ -183,7 +193,7 @@ export async function getReport({ standId, filter, start, end, onStatus }) {
     page += 1;
   }
 
-  const charIds = (filter.characteristics || []).map((c) => c.id);
+  const charIds = (filterJson.characteristics || []).map((c) => c.id);
   const table = mapDisplayColumns(headers, allRows, charIds.length ? charIds : CHAR_COLUMNS);
   return { ok: true, table, raw: lastJson, stands, url: lastUrl };
 }

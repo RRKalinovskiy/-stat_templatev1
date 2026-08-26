@@ -1,4 +1,4 @@
-import { loadState, saveStands, saveFilters, saveLastReport } from "./storage.js";
+import { loadState, saveStands, saveFilters, saveLastReport, saveSelection } from "./storage.js";
 import { DEFAULT_FILTER_JSON, methodDisplayName, reportFileName } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
@@ -118,12 +118,16 @@ function renderFilters() {
 function renderReportSelects() {
   const standSel = $("report-stand");
   const filterSel = $("report-filter");
+  const standId = state.selectedStandId || standSel.value;
+  const filterId = state.selectedFilterId || filterSel.value;
   standSel.innerHTML = state.stands
     .map((s) => `<option value="${s.id}">${s.title} (${s.host})${s.synced ? "" : " — нет сессии"}</option>`)
     .join("");
   filterSel.innerHTML = state.filters.length
     ? state.filters.map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("")
     : `<option value="">Нет сохранённых фильтров</option>`;
+  if (state.stands.some((s) => s.id === standId)) standSel.value = standId;
+  if (state.filters.some((f) => f.id === filterId)) filterSel.value = filterId;
   const download = $("btn-download");
   if (lastTable?.rows?.length) download.hidden = false;
 }
@@ -150,17 +154,21 @@ $("filter-form").addEventListener("submit", async (e) => {
     return;
   }
   const name = $("filter-name").value.trim();
+  const payload = structuredClone(json);
   if (editingFilterId) {
     const f = state.filters.find((x) => x.id === editingFilterId);
     if (f) {
       f.name = name;
-      f.json = json;
+      f.json = payload;
     }
   } else {
-    state.filters.push({ id: crypto.randomUUID(), name, json });
+    const created = { id: crypto.randomUUID(), name, json: payload };
+    state.filters.push(created);
+    editingFilterId = created.id;
+    state.selectedFilterId = created.id;
+    await saveSelection({ selectedFilterId: created.id });
   }
   await saveFilters(state.filters);
-  editingFilterId = null;
   showMsg($("filter-msg"), "Фильтр сохранён", true);
   renderFilters();
   renderReportSelects();
@@ -192,13 +200,13 @@ $("btn-get-report").addEventListener("click", async () => {
     return;
   }
   status.className = "status busy";
-  status.textContent = "Выполняется CommonStatistic.GetReport…";
+  status.textContent = `Запрос «${filter.name}»…`;
   $("btn-get-report").disabled = true;
   try {
     const res = await callBg({
       type: "getReport",
       standId: $("report-stand").value,
-      filter: filter.json,
+      filterId: filter.id,
       start: start.toISOString(),
       end: end.toISOString()
     });
@@ -266,17 +274,21 @@ function escapeAttr(s) {
 async function init() {
   state = await loadState();
   lastTable = state.lastReport?.table || null;
-  if (state.filters[0]) {
-    $("filter-json").value = JSON.stringify(state.filters[0].json, null, 2);
-    $("filter-name").value = state.filters[0].name;
-    editingFilterId = state.filters[0].id;
-  } else {
-    $("filter-json").value = JSON.stringify(DEFAULT_FILTER_JSON, null, 2);
-  }
+  $("filter-json").value = JSON.stringify(DEFAULT_FILTER_JSON, null, 2);
+  $("filter-name").value = "";
+  editingFilterId = null;
   renderStands();
   renderFilters();
   renderReportSelects();
   defaultRange();
+  $("report-stand").addEventListener("change", () => {
+    state.selectedStandId = $("report-stand").value;
+    saveSelection({ selectedStandId: state.selectedStandId });
+  });
+  $("report-filter").addEventListener("change", () => {
+    state.selectedFilterId = $("report-filter").value;
+    saveSelection({ selectedFilterId: state.selectedFilterId });
+  });
   if (lastTable) {
     $("report-status").className = "status ok";
     $("report-status").textContent = `Последний отчёт: ${lastTable.rows.length} строк`;

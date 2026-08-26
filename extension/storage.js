@@ -21,19 +21,21 @@ async function storeSet(obj) {
 }
 
 export async function loadState() {
-  const data = await storeGet(["stands", "filters", "device", "lastReport"]);
+  const data = await storeGet(["stands", "filters", "device", "lastReport", "selectedFilterId", "selectedStandId"]);
   const stands = mergeStands(data.stands);
   if (JSON.stringify(stands) !== JSON.stringify(data.stands)) await storeSet({ stands });
   let filters = data.filters || [];
   if (!filters.length) {
-    filters = [{ id: crypto.randomUUID(), name: "Ошибки по методам", json: DEFAULT_FILTER_JSON }];
+    filters = [{ id: crypto.randomUUID(), name: "Ошибки по методам", json: structuredClone(DEFAULT_FILTER_JSON) }];
     await storeSet({ filters });
   }
   return {
     stands,
     filters,
     device: data.device || (await ensureDevice()),
-    lastReport: data.lastReport || null
+    lastReport: data.lastReport || null,
+    selectedFilterId: data.selectedFilterId || filters[0]?.id || "",
+    selectedStandId: data.selectedStandId || stands[0]?.id || ""
   };
 }
 
@@ -59,4 +61,22 @@ export async function saveFilters(filters) {
 
 export async function saveLastReport(lastReport) {
   await storeSet({ lastReport });
+}
+
+export async function saveSelection({ selectedFilterId, selectedStandId }) {
+  const patch = {};
+  if (selectedFilterId !== undefined) patch.selectedFilterId = selectedFilterId;
+  if (selectedStandId !== undefined) patch.selectedStandId = selectedStandId;
+  if (Object.keys(patch).length) await storeSet(patch);
+}
+
+export function parseFilterJson(json) {
+  if (typeof json === "string") {
+    try {
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+  return json && typeof json === "object" ? json : null;
 }
