@@ -8,7 +8,9 @@ import {
   parseReportTable,
   mapDisplayColumns,
   extractSid,
-  DEFAULT_FILTER_JSON
+  DEFAULT_FILTER_JSON,
+  authServiceUrl,
+  reportServiceUrl
 } from "../extension/rpc.js";
 
 test("period is replaced in filter JSON", () => {
@@ -55,6 +57,22 @@ test("parse recordset and map columns like the stats table", () => {
   assert.equal(table.rows[0][0], "CoreV3.Collecting (Панов М.В.)");
   assert.equal(table.rows[0][1], "6 364");
   assert.equal(table.rows[0][2], "36");
+});
+
+test("auth and report endpoints match stand services without srv=1", () => {
+  assert.equal(authServiceUrl("fix-cloud.sbis.ru"), "https://fix-cloud.sbis.ru/auth/service/");
+  assert.equal(authServiceUrl("test-cloud.sbis.ru"), "https://test-cloud.sbis.ru/auth/service/");
+  assert.equal(authServiceUrl("pre-cloud.sbis.ru"), "https://pre-cloud.sbis.ru/auth/service/");
+  assert.equal(
+    reportServiceUrl("fix-cloud.sbis.ru"),
+    "https://fix-cloud.sbis.ru/stats-cloud-interface/service/"
+  );
+  assert.equal(
+    reportServiceUrl("test-cloud.sbis.ru"),
+    "https://test-cloud.sbis.ru/stats-cloud-interface/service/"
+  );
+  assert.ok(!authServiceUrl("fix-cloud.sbis.ru").includes("srv="));
+  assert.ok(!reportServiceUrl("fix-cloud.sbis.ru").includes("srv="));
 });
 
 test("extract sid from auth record", () => {

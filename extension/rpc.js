@@ -342,6 +342,23 @@ export function buildAuthParams(login, password, host, device) {
   ]);
 }
 
+export const AUTH_SERVICE_PATH = "/auth/service/";
+export const REPORT_SERVICE_PATH = "/stats-cloud-interface/service/";
+
+export function standServiceUrl(host, path) {
+  const pathname = path.startsWith("/") ? path : `/${path}`;
+  const withSlash = pathname.endsWith("/") ? pathname : `${pathname}/`;
+  return `https://${host}${withSlash}`;
+}
+
+export function authServiceUrl(host) {
+  return standServiceUrl(host, AUTH_SERVICE_PATH);
+}
+
+export function reportServiceUrl(host) {
+  return standServiceUrl(host, REPORT_SERVICE_PATH);
+}
+
 export function rpcBody(method, params, id = 1) {
   return {
     jsonrpc: "2.0",
