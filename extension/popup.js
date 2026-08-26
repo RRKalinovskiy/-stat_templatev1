@@ -3,6 +3,17 @@ import { DEFAULT_FILTER_JSON } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
+async function callBg(msg) {
+  if (typeof chrome !== "undefined" && chrome.runtime?.id && chrome.runtime.sendMessage) {
+    const res = await chrome.runtime.sendMessage(msg);
+    if (res == null) throw new Error("Нет ответа от background — обновите расширение на chrome://extensions");
+    return res;
+  }
+  if (msg.type === "syncStand") return syncStand(msg.standId);
+  if (msg.type === "getReport") return getReport(msg);
+  throw new Error("unknown message");
+}
+
 const pages = document.querySelectorAll(".page");
 const tabs = document.querySelectorAll(".tab");
 let state = { stands: [], filters: [], lastReport: null };
@@ -61,7 +72,7 @@ function renderStands() {
       e.target.disabled = true;
       e.target.textContent = "Синхронизация…";
       try {
-        const res = await syncStand(stand.id);
+        const res = await callBg({ type: "syncStand", standId: stand.id });
         if (res.stands) state.stands = res.stands;
         if (!res.ok) showMsg(card.querySelector(".msg") || card.appendChild(Object.assign(document.createElement("p"), { className: "msg err" })), res.error, false);
       } catch (err) {
@@ -184,15 +195,12 @@ $("btn-get-report").addEventListener("click", async () => {
   status.textContent = "Выполняется CommonStatistic.GetReport…";
   $("btn-get-report").disabled = true;
   try {
-    const res = await getReport({
+    const res = await callBg({
+      type: "getReport",
       standId: $("report-stand").value,
       filter: filter.json,
       start: start.toISOString(),
-      end: end.toISOString(),
-      onStatus: (t) => {
-        status.className = "status busy";
-        status.textContent = t;
-      }
+      end: end.toISOString()
     });
     if (res.stands) state.stands = res.stands;
     if (!res.ok) {

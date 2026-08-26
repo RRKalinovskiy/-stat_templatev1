@@ -37,7 +37,8 @@ async function postJson(url, method, params, extraHeaders = {}) {
   return fetch(url, {
     method: "POST",
     credentials: "include",
-    redirect: "manual",
+    mode: "cors",
+    redirect: "follow",
     headers: rpcHeaders(method, extraHeaders),
     body: JSON.stringify(rpcBody(method, params))
   });
