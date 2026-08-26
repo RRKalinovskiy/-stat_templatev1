@@ -1,22 +1,22 @@
-# Saby Stats Report — браузерное расширение
+# Saby Stats Report
 
-Chrome MV3-расширение для отчётов статистики Saby по внутренним стендам.
+Chrome MV3-расширение: отчёты статистики Saby по внутренним стендам.
 
-## Стенды (уже в макете)
+## Экраны
 
-- `fix-cloud.sbis.ru`
-- `test-cloud.sbis.ru`
-- `pre-cloud.sbis.ru`
+1. **Стенды** — `fix-cloud.sbis.ru` / `test-cloud.sbis.ru` / `pre-cloud.sbis.ru`. Логин, пароль, синхронизация (`SAP.Authenticate` → `/auth/service/`). Cookies (`sid`) сохраняются в браузере.
+2. **Фильтры** — имя и JSON. При отчёте подменяется только `period`.
+3. **Отчёт** — фильтр, дата-время, `CommonStatistic.GetReport` → `/stats-cloud-interface/service/`, затем PDF.
 
-Запросы идут с `credentials: "include"` через текущее сетевое подключение пользователя (VPN / внутренний DNS). Отдельный прокси не используется.
-
-## Три экрана
-
-1. **Стенды** — логин/пароль и кнопка «Синхронизировать» (`SAP.Authenticate` → `https://{stand}/auth/service/`, cookies сохраняет браузер).
-2. **Фильтры** — имя + JSON фильтра (как в аналитике). Период при отчёте подменяется.
-3. **Отчёт** — выбор фильтра, дата-время, «Получить отчёт» (`CommonStatistic.GetReport` → `https://{stand}/stats-cloud-interface/service/`), затем «Скачать отчёт» (PDF-таблица).
+Запросы идут с `credentials: "include"` через текущее подключение (VPN / внутренний DNS).
 
 ## Установка
 
 1. Chrome → `chrome://extensions` → режим разработчика.
 2. «Загрузить распакованное» → папка `extension/`.
+
+## Проверка без стенда
+
+```bash
+npm test
+```
