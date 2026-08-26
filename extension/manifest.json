@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Saby Stats Report",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Отчёты статистики по стендам Saby: фильтры, CommonStatistic.GetReport, PDF",
   "action": {
     "default_popup": "popup.html",
@@ -22,7 +22,16 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "cookies", "downloads"],
+  "permissions": ["storage", "cookies", "downloads", "declarativeNetRequestWithHostAccess"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "stand_headers",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
   "host_permissions": [
     "https://fix-cloud.sbis.ru/*",
     "https://test-cloud.sbis.ru/*",

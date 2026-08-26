@@ -359,6 +359,24 @@ export function reportServiceUrl(host) {
   return standServiceUrl(host, REPORT_SERVICE_PATH);
 }
 
+export function rpcCallUrl(serviceUrl, { id = 1, protocol = 7, srv = false } = {}) {
+  const u = new URL(serviceUrl);
+  u.searchParams.set("id", String(id));
+  u.searchParams.set("protocol", String(protocol));
+  if (srv) u.searchParams.set("srv", "1");
+  return u.toString();
+}
+
+export function authCallUrls(host) {
+  const base = authServiceUrl(host);
+  return [rpcCallUrl(base), rpcCallUrl(base, { srv: true })];
+}
+
+export function reportCallUrls(host) {
+  const base = reportServiceUrl(host);
+  return [rpcCallUrl(base), rpcCallUrl(base, { srv: true })];
+}
+
 export function rpcBody(method, params, id = 1) {
   return {
     jsonrpc: "2.0",

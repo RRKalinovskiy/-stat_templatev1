@@ -10,7 +10,10 @@ import {
   extractSid,
   DEFAULT_FILTER_JSON,
   authServiceUrl,
-  reportServiceUrl
+  reportServiceUrl,
+  rpcCallUrl,
+  authCallUrls,
+  reportCallUrls
 } from "../extension/rpc.js";
 
 test("period is replaced in filter JSON", () => {
@@ -68,11 +71,21 @@ test("auth and report endpoints match stand services without srv=1", () => {
     "https://fix-cloud.sbis.ru/stats-cloud-interface/service/"
   );
   assert.equal(
-    reportServiceUrl("test-cloud.sbis.ru"),
-    "https://test-cloud.sbis.ru/stats-cloud-interface/service/"
+    rpcCallUrl(authServiceUrl("fix-cloud.sbis.ru")),
+    "https://fix-cloud.sbis.ru/auth/service/?id=1&protocol=7"
   );
-  assert.ok(!authServiceUrl("fix-cloud.sbis.ru").includes("srv="));
-  assert.ok(!reportServiceUrl("fix-cloud.sbis.ru").includes("srv="));
+  assert.equal(
+    rpcCallUrl(reportServiceUrl("fix-cloud.sbis.ru")),
+    "https://fix-cloud.sbis.ru/stats-cloud-interface/service/?id=1&protocol=7"
+  );
+  assert.deepEqual(authCallUrls("fix-cloud.sbis.ru"), [
+    "https://fix-cloud.sbis.ru/auth/service/?id=1&protocol=7",
+    "https://fix-cloud.sbis.ru/auth/service/?id=1&protocol=7&srv=1"
+  ]);
+  assert.equal(
+    reportCallUrls("fix-cloud.sbis.ru")[0],
+    "https://fix-cloud.sbis.ru/stats-cloud-interface/service/?id=1&protocol=7"
+  );
 });
 
 test("extract sid from auth record", () => {

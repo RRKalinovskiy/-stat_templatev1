@@ -1,15 +1,15 @@
 import {
   buildAuthParams,
   buildGetReportParams,
-  rpcBody,
   parseReportTable,
   mapDisplayColumns,
   extractSid,
   isPendingResult,
   isAuthError,
   CHAR_COLUMNS,
-  authServiceUrl,
-  reportServiceUrl
+  authCallUrls,
+  reportCallUrls,
+  rpcBody
 } from "./rpc.js";
 import { loadState, saveStands } from "./storage.js";
 
@@ -23,8 +23,14 @@ function parseBody(text) {
   }
 }
 
-function isRedirectStatus(status) {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+function rpcHeaders(method, extra = {}) {
+  return {
+    Accept: "application/json,text/javascript,*/*",
+    "Content-Type": "application/json;charset=utf-8",
+    "X-CalledMethod": method,
+    "X-Requested-With": "XMLHttpRequest",
+    ...extra
+  };
 }
 
 async function postJson(url, method, params, extraHeaders = {}) {
@@ -32,43 +38,46 @@ async function postJson(url, method, params, extraHeaders = {}) {
     method: "POST",
     credentials: "include",
     redirect: "manual",
-    headers: {
-      Accept: "application/json,text/javascript,*/*",
-      "Content-Type": "application/json;charset=utf-8",
-      ...extraHeaders
-    },
+    headers: rpcHeaders(method, extraHeaders),
     body: JSON.stringify(rpcBody(method, params))
   });
 }
 
-async function readResponse(res) {
-  const text = await res.text();
-  return { status: res.status, ok: res.ok, json: parseBody(text), text, url: res.url || "" };
+function isRedirectStatus(status) {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
 export async function rpcFetch(url, method, params, extraHeaders = {}) {
   let res = await postJson(url, method, params, extraHeaders);
-
   if (isRedirectStatus(res.status)) {
     const location = res.headers.get("Location");
     if (location) {
       const next = new URL(location, url);
-      if (!next.pathname.endsWith("/")) next.pathname += "/";
       res = await postJson(next.toString(), method, params, extraHeaders);
     }
   }
+  const text = await res.text();
+  const json = parseBody(text);
+  const ok = res.ok && !json?.error;
+  return {
+    status: res.status,
+    ok,
+    json,
+    text,
+    requestUrl: url,
+    error: ok
+      ? ""
+      : json?.error?.message || `HTTP ${res.status} POST ${url}${text ? `: ${text.slice(0, 240)}` : ""}`
+  };
+}
 
-  if (res.status === 405 && extraHeaders["X-CalledMethod"]) {
-    const { "X-CalledMethod": _drop, ...rest } = extraHeaders;
-    res = await postJson(url, method, params, rest);
+export async function rpcFetchWithFallback(urls, method, params, extraHeaders = {}) {
+  let last = null;
+  for (const url of urls) {
+    last = await rpcFetch(url, method, params, extraHeaders);
+    if (last.status !== 405) return last;
   }
-
-  const parsed = await readResponse(res);
-  parsed.requestUrl = url;
-  if (!parsed.ok) {
-    parsed.error = `HTTP ${parsed.status} POST ${url}${parsed.text ? `: ${parsed.text.slice(0, 240)}` : ""}`;
-  }
-  return parsed;
+  return last;
 }
 
 export async function captureCookies(host) {
@@ -95,16 +104,16 @@ export async function syncStand(standId) {
   if (!stand) throw new Error("Стенд не найден");
   if (!stand.login || !stand.password) throw new Error("Укажите логин и пароль");
 
-  const url = authServiceUrl(stand.host);
-  const resp = await rpcFetch(url, "SAP.Authenticate", {
+  const urls = authCallUrls(stand.host);
+  const resp = await rpcFetchWithFallback(urls, "SAP.Authenticate", {
     data: buildAuthParams(stand.login, stand.password, stand.host, device)
   });
 
-  if (resp.json?.error || !resp.ok) {
+  if (!resp.ok) {
     stand.synced = false;
-    stand.lastError = resp.json?.error?.message || resp.error || `HTTP ${resp.status}`;
+    stand.lastError = resp.error;
     await saveStands(stands);
-    return { ok: false, error: stand.lastError, stands, url };
+    return { ok: false, error: resp.error, stands, url: resp.requestUrl };
   }
 
   const sid = extractSid(resp.json.result ?? resp.json);
@@ -115,7 +124,7 @@ export async function syncStand(standId) {
   stand.lastError = "";
   stand.syncedAt = new Date().toISOString();
   await saveStands(stands);
-  return { ok: true, stands, sid: stand.sid, url };
+  return { ok: true, stands, sid: stand.sid, url: resp.requestUrl };
 }
 
 function reportHeaders(stand) {
@@ -130,25 +139,27 @@ export async function getReport({ standId, filter, start, end, onStatus }) {
   if (!stand) throw new Error("Стенд не найден");
   if (!stand.synced) throw new Error("Сначала синхронизируйте стенд");
 
-  const url = reportServiceUrl(stand.host);
+  const urls = reportCallUrls(stand.host);
   const startDate = new Date(start);
   const endDate = new Date(end);
   const allRows = [];
   let headers = [];
   let page = 0;
   let lastJson = null;
+  let lastUrl = urls[0];
 
   while (page < 40) {
     onStatus?.(`Запрос отчёта, страница ${page + 1}…`);
     const params = buildGetReportParams(filter, startDate, endDate, page, PAGE_SIZE);
-    let last = await rpcFetch(url, "CommonStatistic.GetReport", params, reportHeaders(stand));
+    let last = await rpcFetchWithFallback(urls, "CommonStatistic.GetReport", params, reportHeaders(stand));
+    lastUrl = last.requestUrl;
 
     let attempt = 0;
-    while (last.ok && !last.json?.error && isPendingResult(last.json) && attempt < 30) {
+    while (last.ok && isPendingResult(last.json) && attempt < 30) {
       attempt += 1;
       onStatus?.(`Выполняется запрос… (${attempt})`);
       await new Promise((r) => setTimeout(r, 1000));
-      last = await rpcFetch(url, "CommonStatistic.GetReport", params, reportHeaders(stand));
+      last = await rpcFetchWithFallback(urls, "CommonStatistic.GetReport", params, reportHeaders(stand));
     }
 
     lastJson = last.json;
@@ -158,10 +169,10 @@ export async function getReport({ standId, filter, start, end, onStatus }) {
         stand.lastError = last.json.error.message;
         await saveStands(stands);
       }
-      return { ok: false, error: last.json.error.message || JSON.stringify(last.json.error), stands, url };
+      return { ok: false, error: last.json.error.message || JSON.stringify(last.json.error), stands, url: lastUrl };
     }
     if (!last.ok) {
-      return { ok: false, error: last.error || `HTTP ${last.status}`, url };
+      return { ok: false, error: last.error, url: lastUrl };
     }
 
     const parsed = parseReportTable(last.json.result ?? last.json);
@@ -173,5 +184,5 @@ export async function getReport({ standId, filter, start, end, onStatus }) {
 
   const charIds = (filter.characteristics || []).map((c) => c.id);
   const table = mapDisplayColumns(headers, allRows, charIds.length ? charIds : CHAR_COLUMNS);
-  return { ok: true, table, raw: lastJson, stands, url };
+  return { ok: true, table, raw: lastJson, stands, url: lastUrl };
 }

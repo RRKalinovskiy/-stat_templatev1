@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://fix-cloud.sbis.ru" },
+        { "header": "Referer", "operation": "set", "value": "https://fix-cloud.sbis.ru/" }
+      ]
+    },
+    "condition": {
+      "requestDomains": ["fix-cloud.sbis.ru"],
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://test-cloud.sbis.ru" },
+        { "header": "Referer", "operation": "set", "value": "https://test-cloud.sbis.ru/" }
+      ]
+    },
+    "condition": {
+      "requestDomains": ["test-cloud.sbis.ru"],
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://pre-cloud.sbis.ru" },
+        { "header": "Referer", "operation": "set", "value": "https://pre-cloud.sbis.ru/" }
+      ]
+    },
+    "condition": {
+      "requestDomains": ["pre-cloud.sbis.ru"],
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  }
+]
