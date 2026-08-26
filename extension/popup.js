@@ -207,6 +207,7 @@ $("btn-get-report").addEventListener("click", async () => {
       type: "getReport",
       standId: $("report-stand").value,
       filterId: filter.id,
+      filter: filter.json,
       start: start.toISOString(),
       end: end.toISOString()
     });

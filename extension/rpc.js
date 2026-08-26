@@ -162,8 +162,28 @@ function rs(f, d, s) {
   return { d, s, _type: "recordset", f };
 }
 
+export function normalizeFilterObject(raw) {
+  let json = raw;
+  if (typeof json === "string") {
+    try {
+      json = JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+  if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+  if (!json.characteristics && json.filter && typeof json.filter === "object" && !Array.isArray(json.filter)) {
+    json = json.filter;
+  }
+  return json;
+}
+
 export function applyPeriod(filter, start, end) {
-  const next = structuredClone(filter);
+  const base = normalizeFilterObject(filter);
+  if (!base) {
+    throw new Error("Фильтр не задан или это не JSON-объект");
+  }
+  const next = JSON.parse(JSON.stringify(base));
   next.period = [{ start: start.toISOString(), end: end.toISOString() }];
   return next;
 }

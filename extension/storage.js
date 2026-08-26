@@ -1,4 +1,4 @@
-import { DEFAULT_FILTER_JSON, mergeStands } from "./rpc.js";
+import { DEFAULT_FILTER_JSON, mergeStands, normalizeFilterObject } from "./rpc.js";
 
 const memory = {};
 
@@ -71,12 +71,5 @@ export async function saveSelection({ selectedFilterId, selectedStandId }) {
 }
 
 export function parseFilterJson(json) {
-  if (typeof json === "string") {
-    try {
-      return JSON.parse(json);
-    } catch {
-      return null;
-    }
-  }
-  return json && typeof json === "object" ? json : null;
+  return normalizeFilterObject(json);
 }

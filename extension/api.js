@@ -140,13 +140,10 @@ export async function getReport({ standId, filter, filterId, start, end, onStatu
   if (!stand) throw new Error("Стенд не найден");
   if (!stand.synced) throw new Error("Сначала синхронизируйте стенд");
 
-  let filterJson = filter;
+  let filterJson = parseFilterJson(filter);
   if (filterId) {
     const saved = filters.find((f) => f.id === filterId);
-    if (!saved) throw new Error("Выбранный фильтр не найден");
-    filterJson = parseFilterJson(saved.json);
-  } else {
-    filterJson = parseFilterJson(filter);
+    if (saved) filterJson = parseFilterJson(saved.json) || filterJson;
   }
   if (!filterJson) throw new Error("Некорректный JSON фильтра");
 
