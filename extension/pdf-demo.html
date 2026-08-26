@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>PDF table preview</title>
+  <style>body { background:#1e2732; color:#fff; font-family: sans-serif; }</style>
+</head>
+<body>
+  <p>Превью таблицы отчёта</p>
+  <canvas id="c"></canvas>
+  <script type="module">
+    import { mapDisplayColumns } from "./rpc.js";
+    const parsed = {
+      headers: ["Метод_Метод","Метод_Ответственный","Количество вызовов","Количество ошибок","Общая продолжительность (мс)","Максимальная продолжительность (мс)","Средняя продолжительность (мс)","Количество предупреждений"],
+      rows: [
+        ["CoreV3.Collecting","Панов М.В.",6364,36,10849078,5000,1704.76,2],
+        ["CRMClients.ListClientsOnline","Гаврилов М.В.",61645,20,88421,1200,1.43,0]
+      ]
+    };
+    const table = mapDisplayColumns(parsed.headers, parsed.rows);
+    const { tableToPdfBlob } = await import("./pdf.js");
+    // reuse renderer by drawing via tableToPdfBlob then also show a simple HTML table
+    const wrap = document.createElement("table");
+    wrap.style.cssText = "border-collapse:collapse;background:#313e4f;font:13px sans-serif;color:#e8edf2";
+    wrap.innerHTML = `<thead><tr>${table.headers.map(h=>`<th style="text-align:left;padding:8px;background:#26303c">${h}</th>`).join("")}</tr></thead>` +
+      `<tbody>${table.rows.map(r=>`<tr>${r.map((c,i)=>`<td style="padding:8px;text-align:${i? "right":"left"}">${c}</td>`).join("")}</tr>`).join("")}</tbody>`;
+    document.body.appendChild(wrap);
+    const blob = await tableToPdfBlob("Отчёт по вызовам БЛ", table.headers, table.rows);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "sample-report.pdf";
+    a.textContent = "Скачать sample PDF";
+    a.style.color = "#ff7033";
+    document.body.appendChild(document.createElement("br"));
+    document.body.appendChild(a);
+  </script>
+</body>
+</html>
