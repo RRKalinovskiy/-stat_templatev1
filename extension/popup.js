@@ -1,9 +1,11 @@
-import { loadState, saveStands, saveFilters, DEFAULT_FILTER_JSON } from "./rpc.js";
+import { loadState, saveStands, saveFilters, saveLastReport } from "./storage.js";
+import { DEFAULT_FILTER_JSON } from "./rpc.js";
+import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
 const pages = document.querySelectorAll(".page");
 const tabs = document.querySelectorAll(".tab");
-let state = { stands: [], filters: [] };
+let state = { stands: [], filters: [], lastReport: null };
 let lastTable = null;
 let editingFilterId = null;
 
@@ -58,8 +60,15 @@ function renderStands() {
       await saveStands(state.stands);
       e.target.disabled = true;
       e.target.textContent = "Синхронизация…";
-      const res = await chrome.runtime.sendMessage({ type: "syncStand", standId: stand.id });
-      if (res.stands) state.stands = res.stands;
+      try {
+        const res = await syncStand(stand.id);
+        if (res.stands) state.stands = res.stands;
+        if (!res.ok) showMsg(card.querySelector(".msg") || card.appendChild(Object.assign(document.createElement("p"), { className: "msg err" })), res.error, false);
+      } catch (err) {
+        stand.synced = false;
+        stand.lastError = err.message || String(err);
+        await saveStands(state.stands);
+      }
       e.target.disabled = false;
       e.target.textContent = "Синхронизировать";
       renderStands();
@@ -89,6 +98,7 @@ function renderFilters() {
       state.filters = state.filters.filter((x) => x.id !== f.id);
       await saveFilters(state.filters);
       renderFilters();
+      renderReportSelects();
     });
     $("filters-list").appendChild(row);
   }
@@ -103,6 +113,8 @@ function renderReportSelects() {
   filterSel.innerHTML = state.filters.length
     ? state.filters.map((f) => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("")
     : `<option value="">Нет сохранённых фильтров</option>`;
+  const download = $("btn-download");
+  if (lastTable?.rows?.length) download.hidden = false;
 }
 
 function defaultRange() {
@@ -140,6 +152,7 @@ $("filter-form").addEventListener("submit", async (e) => {
   editingFilterId = null;
   showMsg($("filter-msg"), "Фильтр сохранён", true);
   renderFilters();
+  renderReportSelects();
 });
 
 $("filter-reset").addEventListener("click", () => {
@@ -162,37 +175,62 @@ $("btn-get-report").addEventListener("click", async () => {
   }
   const start = new Date($("report-start").value);
   const end = new Date($("report-end").value);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    status.className = "status err";
+    status.textContent = "Укажите корректные дату и время";
+    return;
+  }
   status.className = "status busy";
   status.textContent = "Выполняется CommonStatistic.GetReport…";
   $("btn-get-report").disabled = true;
-  const res = await chrome.runtime.sendMessage({
-    type: "getReport",
-    standId: $("report-stand").value,
-    filter: filter.json,
-    start: start.toISOString(),
-    end: end.toISOString()
-  });
-  $("btn-get-report").disabled = false;
-  if (!res?.ok) {
+  try {
+    const res = await getReport({
+      standId: $("report-stand").value,
+      filter: filter.json,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      onStatus: (t) => {
+        status.className = "status busy";
+        status.textContent = t;
+      }
+    });
+    if (res.stands) state.stands = res.stands;
+    if (!res.ok) {
+      status.className = "status err";
+      status.textContent = res.error || "Ошибка запроса";
+      return;
+    }
+    lastTable = res.table;
+    await saveLastReport({ table: lastTable, at: new Date().toISOString(), filterName: filter.name });
+    status.className = "status ok";
+    status.textContent = `Готово: ${lastTable.rows.length} строк. Можно скачать PDF.`;
+    download.hidden = false;
+  } catch (err) {
     status.className = "status err";
-    status.textContent = res?.error || "Ошибка запроса";
-    return;
+    status.textContent = err.message || String(err);
+  } finally {
+    $("btn-get-report").disabled = false;
   }
-  lastTable = res.table;
-  status.className = "status ok";
-  status.textContent = `Готово: ${lastTable.rows.length} строк. Можно скачать PDF.`;
-  download.hidden = false;
 });
 
 $("btn-download").addEventListener("click", async () => {
   if (!lastTable) return;
   const blob = await tableToPdfBlob("Отчёт по вызовам БЛ", lastTable.headers, lastTable.rows);
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `stats-report-${Date.now()}.pdf`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const filename = `stats-report-${Date.now()}.pdf`;
+  try {
+    if (typeof chrome !== "undefined" && chrome.downloads?.download) {
+      await chrome.downloads.download({ url, filename, saveAs: true });
+    } else {
+      throw new Error("no downloads api");
+    }
+  } catch {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 });
 
 function escapeHtml(s) {
@@ -204,17 +242,23 @@ function escapeAttr(s) {
 
 async function init() {
   state = await loadState();
-  if (!state.filters.length) {
-    $("filter-json").value = JSON.stringify(DEFAULT_FILTER_JSON, null, 2);
-  } else {
+  lastTable = state.lastReport?.table || null;
+  if (state.filters[0]) {
     $("filter-json").value = JSON.stringify(state.filters[0].json, null, 2);
     $("filter-name").value = state.filters[0].name;
     editingFilterId = state.filters[0].id;
+  } else {
+    $("filter-json").value = JSON.stringify(DEFAULT_FILTER_JSON, null, 2);
   }
   renderStands();
   renderFilters();
   renderReportSelects();
   defaultRange();
+  if (lastTable) {
+    $("report-status").className = "status ok";
+    $("report-status").textContent = `Последний отчёт: ${lastTable.rows.length} строк`;
+    $("btn-download").hidden = false;
+  }
 }
 
 init();

@@ -1,0 +1,8 @@
+{
+  "name": "saby-stats-report",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/rpc.test.js"
+  }
+}

@@ -52,37 +52,17 @@ export const DEFAULT_FILTER_JSON = {
   displayType: "Таблица"
 };
 
-export async function loadState() {
-  const data = await chrome.storage.local.get(["stands", "filters", "device"]);
-  return {
-    stands: data.stands?.length ? data.stands : structuredClone(DEFAULT_STANDS),
-    filters: data.filters || [],
-    device: data.device || (await ensureDevice())
-  };
-}
+export const CHAR_COLUMNS = [
+  "Количество вызовов",
+  "Количество ошибок",
+  "Общая продолжительность (мс)",
+  "Максимальная продолжительность (мс)",
+  "Средняя продолжительность (мс)",
+  "Количество предупреждений"
+];
 
-async function ensureDevice() {
-  const id = crypto.randomUUID();
-  const device = {
-    machineId: id,
-    newMachineId: crypto.randomUUID(),
-    machineName: "STATS-EXT",
-    os: "Windows 10.0"
-  };
-  await chrome.storage.local.set({ device });
-  return device;
-}
-
-export async function saveStands(stands) {
-  await chrome.storage.local.set({ stands });
-}
-
-export async function saveFilters(filters) {
-  await chrome.storage.local.set({ filters });
-}
-
-export function pad(n) {
-  return String(n).padStart(2, "0");
+export function defaultStands() {
+  return structuredClone(DEFAULT_STANDS);
 }
 
 export function toMoscowParts(date) {
@@ -136,7 +116,15 @@ export function applyPeriod(filter, start, end) {
   return next;
 }
 
-export function buildGetReportParams(filter, start, end) {
+export function buildNavigation(page, pageSize = 50) {
+  return rec(0, [true, pageSize, page], [
+    { t: "Логическое", n: "ЕстьЕще" },
+    { t: "Число целое", n: "РазмерСтраницы" },
+    { t: "Число целое", n: "Страница" }
+  ]);
+}
+
+export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50) {
   const f = applyPeriod(filter, start, end);
   const tz = f.TZ ?? 3;
 
@@ -292,11 +280,7 @@ export function buildGetReportParams(filter, start, end) {
       { t: "Запись", n: "Фильтр" }
     ]),
     Сортировка: null,
-    Навигация: rec(0, [true, 50, 0], [
-      { t: "Логическое", n: "ЕстьЕще" },
-      { t: "Число целое", n: "РазмерСтраницы" },
-      { t: "Число целое", n: "Страница" }
-    ]),
+    Навигация: buildNavigation(page, pageSize),
     ДопПоля: []
   };
 }
@@ -372,21 +356,51 @@ export function formatNumber(value) {
   if (value == null || value === "") return "";
   const n = Number(value);
   if (Number.isNaN(n)) return String(value);
-  const [int, frac] = n.toFixed(Number.isInteger(n) ? 0 : 2).split(".");
+  const decimals = Number.isInteger(n) ? 0 : 2;
+  const [int, frac] = n.toFixed(decimals).split(".");
   const withSpaces = int.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  return frac ? `${withSpaces},${frac}` : withSpaces;
+  return frac ? `${withSpaces}.${frac}` : withSpaces;
 }
 
 export function parseReportTable(result) {
-  const rs = findRecordset(result);
-  if (!rs) return { headers: [], rows: [] };
-  const headers = (rs.s || []).map((c) => c.n || c.id || "");
-  const rows = (rs.d || []).map((row) => {
+  const found = findRecordset(result);
+  if (!found) return { headers: [], rows: [], hasMore: false };
+  const headers = (found.s || []).map((c) => c.n || c.id || "");
+  const rows = (found.d || []).map((row) => {
     if (Array.isArray(row)) return row;
     if (row && Array.isArray(row.d)) return row.d;
     return headers.map((h) => row?.[h]);
   });
-  return { headers, rows };
+  return { headers, rows, hasMore: detectHasMore(result, rows.length) };
+}
+
+export function detectHasMore(result, rowCount) {
+  const flag = findNamedValue(result, "ЕстьЕще");
+  if (typeof flag === "boolean") return flag;
+  if (rowCount >= 50) return true;
+  return false;
+}
+
+function findNamedValue(node, name, depth = 0) {
+  if (!node || depth > 10) return undefined;
+  if (node.s && node.d && Array.isArray(node.s)) {
+    const idx = node.s.findIndex((c) => c.n === name);
+    if (idx >= 0 && Array.isArray(node.d) && !Array.isArray(node.d[0])) return node.d[idx];
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const v = findNamedValue(item, name, depth + 1);
+      if (v !== undefined) return v;
+    }
+  } else if (typeof node === "object") {
+    for (const v of Object.values(node)) {
+      if (v && typeof v === "object") {
+        const found = findNamedValue(v, name, depth + 1);
+        if (found !== undefined) return found;
+      }
+    }
+  }
+  return undefined;
 }
 
 function findRecordset(node, depth = 0) {
@@ -417,26 +431,42 @@ function findRecordset(node, depth = 0) {
   return null;
 }
 
-export function mapDisplayColumns(headers, rows) {
+export function extractSid(result) {
+  const direct = findNamedValue(result, "sid") ?? findNamedValue(result, "Сид") ?? findNamedValue(result, "SID");
+  if (typeof direct === "string" && direct) return direct;
+  if (typeof result === "string") return result;
+  return null;
+}
+
+export function mapDisplayColumns(headers, rows, characteristicIds = CHAR_COLUMNS) {
   const methodIdx = headers.findIndex((h) => /Метод_Метод$/.test(h) || h === "Метод");
   const ownerIdx = headers.findIndex((h) => /Ответственный/.test(h));
-  const charOrder = [
-    "Количество вызовов",
-    "Количество ошибок",
-    "Общая продолжительность (мс)",
-    "Максимальная продолжительность (мс)",
-    "Средняя продолжительность (мс)",
-    "Количество предупреждений"
-  ];
-  const charIdx = charOrder.map((name) => headers.findIndex((h) => h === name));
+  const charIdx = characteristicIds.map((name) => headers.findIndex((h) => h === name));
+  const missingChars = charIdx.every((i) => i < 0);
 
-  const outHeaders = ["Метод БЛ", ...charOrder];
+  const outHeaders = ["Метод БЛ", ...characteristicIds];
   const outRows = rows.map((row) => {
     const method = methodIdx >= 0 ? row[methodIdx] : row[0];
     const owner = ownerIdx >= 0 ? row[ownerIdx] : "";
     const title = owner ? `${method} (${owner})` : String(method ?? "");
-    const cells = charIdx.map((i, n) => (i >= 0 ? formatNumber(row[i]) : formatNumber(row[n + 1])));
-    return [title, ...cells];
+    if (missingChars) {
+      const rest = row.slice(methodIdx >= 0 ? 1 : 1).map((v) => formatNumber(v));
+      return [title, ...characteristicIds.map((_, n) => rest[n] ?? "")];
+    }
+    return [title, ...charIdx.map((i) => (i >= 0 ? formatNumber(row[i]) : ""))];
   });
   return { headers: outHeaders, rows: outRows };
+}
+
+export function isPendingResult(json) {
+  const r = json?.result;
+  if (!r) return false;
+  const status = r.status || r.Статус || r.state;
+  if (typeof status === "string" && /wait|pending|process|выполн/i.test(status)) return true;
+  return false;
+}
+
+export function isAuthError(json) {
+  const msg = json?.error?.message || json?.error?.details || "";
+  return /session|авториз|sid|не автори/i.test(String(msg));
 }
