@@ -87,7 +87,7 @@ test("method name strips $$ composite key", () => {
 test("auth and report endpoints match stand services without srv=1", () => {
   assert.equal(authServiceUrl("fix-cloud.sbis.ru"), "https://fix-cloud.sbis.ru/auth/service/");
   assert.equal(authServiceUrl("test-cloud.sbis.ru"), "https://test-cloud.sbis.ru/auth/service/");
-  assert.equal(authServiceUrl("pre-cloud.sbis.ru"), "https://pre-cloud.sbis.ru/auth/service/");
+  assert.equal(authServiceUrl("pre-test-cloud.sbis.ru"), "https://pre-test-cloud.sbis.ru/auth/service/");
   assert.equal(
     reportServiceUrl("fix-cloud.sbis.ru"),
     "https://fix-cloud.sbis.ru/stats-cloud-interface/service/"
@@ -121,11 +121,13 @@ test("report file name is filter (stand) date", () => {
 
 test("mergeStands adds pre-test without dropping saved logins", () => {
   const merged = mergeStands([
-    { id: "fix", host: "fix-cloud.sbis.ru", title: "FIX", login: "Viewer", password: "x", synced: true }
+    { id: "fix", host: "fix-cloud.sbis.ru", title: "FIX", login: "Viewer", password: "x", synced: true },
+    { id: "pre", host: "pre-cloud.sbis.ru", title: "PRE", login: "old", password: "y" }
   ]);
   assert.equal(merged.find((s) => s.id === "fix").login, "Viewer");
   const preTest = merged.find((s) => s.id === "pre-test");
   assert.equal(preTest.host, "pre-test-cloud.sbis.ru");
+  assert.equal(merged.some((s) => s.id === "pre" || s.host === "pre-cloud.sbis.ru"), false);
   assert.equal(authServiceUrl(preTest.host), "https://pre-test-cloud.sbis.ru/auth/service/");
 });
 

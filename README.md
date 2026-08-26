@@ -4,7 +4,7 @@ Chrome MV3-расширение: отчёты статистики Saby по в�
 
 ## Экраны
 
-1. **Стенды** — `fix-cloud.sbis.ru` / `test-cloud.sbis.ru` / `pre-cloud.sbis.ru`. Логин, пароль, синхронизация (`SAP.Authenticate` → `/auth/service/`). Cookies (`sid`) сохраняются в браузере.
+1. **Стенды** — `fix-cloud.sbis.ru` / `test-cloud.sbis.ru` / `pre-test-cloud.sbis.ru`. Логин, пароль, синхронизация (`SAP.Authenticate` → `/auth/service/`). Cookies (`sid`) сохраняются в браузере.
 2. **Фильтры** — имя и JSON. При отчёте подменяется только `period`.
 3. **Отчёт** — фильтр, дата-время, `CommonStatistic.GetReport` → `/stats-cloud-interface/service/`, затем PDF.
 

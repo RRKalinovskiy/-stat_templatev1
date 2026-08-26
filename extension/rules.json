@@ -35,21 +35,6 @@
     "action": {
       "type": "modifyHeaders",
       "requestHeaders": [
-        { "header": "Origin", "operation": "set", "value": "https://pre-cloud.sbis.ru" },
-        { "header": "Referer", "operation": "set", "value": "https://pre-cloud.sbis.ru/" }
-      ]
-    },
-    "condition": {
-      "requestDomains": ["pre-cloud.sbis.ru"],
-      "resourceTypes": ["xmlhttprequest", "other"]
-    }
-  },
-  {
-    "id": 4,
-    "priority": 1,
-    "action": {
-      "type": "modifyHeaders",
-      "requestHeaders": [
         { "header": "Origin", "operation": "set", "value": "https://pre-test-cloud.sbis.ru" },
         { "header": "Referer", "operation": "set", "value": "https://pre-test-cloud.sbis.ru/" }
       ]

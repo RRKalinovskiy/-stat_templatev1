@@ -1,7 +1,6 @@
 const DEFAULT_STANDS = [
   { id: "fix", host: "fix-cloud.sbis.ru", title: "FIX", login: "", password: "", synced: false, lastError: "" },
   { id: "test", host: "test-cloud.sbis.ru", title: "TEST", login: "", password: "", synced: false, lastError: "" },
-  { id: "pre", host: "pre-cloud.sbis.ru", title: "PRE", login: "", password: "", synced: false, lastError: "" },
   { id: "pre-test", host: "pre-test-cloud.sbis.ru", title: "PRE-TEST", login: "", password: "", synced: false, lastError: "" }
 ];
 
@@ -88,6 +87,7 @@ export function mergeStands(saved) {
     };
   });
   for (const s of list) {
+    if (s.id === "pre" || s.host === "pre-cloud.sbis.ru") continue;
     if (!merged.some((d) => d.id === s.id || d.host === s.host)) merged.push(s);
   }
   return merged;

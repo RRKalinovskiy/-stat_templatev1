@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Saby Stats Report",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Отчёты статистики по стендам Saby: фильтры, CommonStatistic.GetReport, PDF",
   "action": {
     "default_popup": "popup.html",
@@ -36,7 +36,6 @@
     "https://*.sbis.ru/*",
     "https://fix-cloud.sbis.ru/*",
     "https://test-cloud.sbis.ru/*",
-    "https://pre-cloud.sbis.ru/*",
     "https://pre-test-cloud.sbis.ru/*"
   ]
 }
