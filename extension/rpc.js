@@ -1,7 +1,8 @@
 const DEFAULT_STANDS = [
   { id: "fix", host: "fix-cloud.sbis.ru", title: "FIX", login: "", password: "", synced: false, lastError: "" },
   { id: "test", host: "test-cloud.sbis.ru", title: "TEST", login: "", password: "", synced: false, lastError: "" },
-  { id: "pre", host: "pre-cloud.sbis.ru", title: "PRE", login: "", password: "", synced: false, lastError: "" }
+  { id: "pre", host: "pre-cloud.sbis.ru", title: "PRE", login: "", password: "", synced: false, lastError: "" },
+  { id: "pre-test", host: "pre-test-cloud.sbis.ru", title: "PRE-TEST", login: "", password: "", synced: false, lastError: "" }
 ];
 
 export const DEFAULT_FILTER_JSON = {
@@ -63,6 +64,33 @@ export const CHAR_COLUMNS = [
 
 export function defaultStands() {
   return structuredClone(DEFAULT_STANDS);
+}
+
+export function standHosts() {
+  return DEFAULT_STANDS.map((s) => s.host);
+}
+
+export function mergeStands(saved) {
+  const defaults = defaultStands();
+  const list = Array.isArray(saved) ? saved : [];
+  const merged = defaults.map((d) => {
+    const hit = list.find((s) => s.id === d.id || s.host === d.host);
+    if (!hit) return d;
+    return {
+      ...d,
+      login: hit.login ?? "",
+      password: hit.password ?? "",
+      synced: !!hit.synced,
+      lastError: hit.lastError ?? "",
+      sid: hit.sid,
+      cookies: hit.cookies,
+      syncedAt: hit.syncedAt
+    };
+  });
+  for (const s of list) {
+    if (!merged.some((d) => d.id === s.id || d.host === s.host)) merged.push(s);
+  }
+  return merged;
 }
 
 export function toMoscowParts(date) {

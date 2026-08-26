@@ -8,6 +8,7 @@ import {
   parseReportTable,
   mapDisplayColumns,
   methodDisplayName,
+  mergeStands,
   reportFileName,
   extractSid,
   DEFAULT_FILTER_JSON,
@@ -116,6 +117,16 @@ test("report file name is filter (stand) date", () => {
     date: new Date("2026-08-26T12:00:00+03:00")
   });
   assert.equal(name, "Ошибки по методам (fix) 26-08-26.pdf");
+});
+
+test("mergeStands adds pre-test without dropping saved logins", () => {
+  const merged = mergeStands([
+    { id: "fix", host: "fix-cloud.sbis.ru", title: "FIX", login: "Viewer", password: "x", synced: true }
+  ]);
+  assert.equal(merged.find((s) => s.id === "fix").login, "Viewer");
+  const preTest = merged.find((s) => s.id === "pre-test");
+  assert.equal(preTest.host, "pre-test-cloud.sbis.ru");
+  assert.equal(authServiceUrl(preTest.host), "https://pre-test-cloud.sbis.ru/auth/service/");
 });
 
 test("extract sid from auth record", () => {

@@ -1,11 +1,21 @@
 import { syncStand, getReport } from "./api.js";
+import { standHosts } from "./rpc.js";
+import { loadState } from "./storage.js";
 
-const STANDS = ["fix-cloud.sbis.ru", "test-cloud.sbis.ru", "pre-cloud.sbis.ru"];
+async function allHosts() {
+  try {
+    const { stands } = await loadState();
+    return [...new Set([...standHosts(), ...(stands || []).map((s) => s.host)])];
+  } catch {
+    return standHosts();
+  }
+}
 
 async function installCorsRules() {
   if (!chrome.declarativeNetRequest?.updateDynamicRules) return;
   const origin = `chrome-extension://${chrome.runtime.id}`;
-  const rules = STANDS.map((domain, i) => ({
+  const hosts = await allHosts();
+  const rules = hosts.map((domain, i) => ({
     id: 100 + i,
     priority: 2,
     action: {
@@ -27,7 +37,7 @@ async function installCorsRules() {
     }
   }));
   await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: rules.map((r) => r.id),
+    removeRuleIds: Array.from({ length: 20 }, (_, i) => 100 + i),
     addRules: rules
   });
 }
