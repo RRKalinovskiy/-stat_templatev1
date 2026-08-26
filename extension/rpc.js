@@ -190,7 +190,7 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
         { t: "Число целое", n: "Top" }
       ]),
       emptyRec,
-      rec(9, [[ownerDim?.values || []]], [{ t: { n: "Массив", t: "Строка" }, n: "Filter" }])
+      rec(9, [ownerDim?.values || []], [{ t: { n: "Массив", t: "Строка" }, n: "Filter" }])
     ],
     [
       { t: "Запись", n: "WEB-Сервис_Приложение" },
