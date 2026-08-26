@@ -11,7 +11,7 @@ import {
   mergeStands,
   reportFileName,
   extractSid,
-  DEFAULT_FILTER_JSON,
+  EMPTY_FILTER_TEMPLATE,
   authServiceUrl,
   reportServiceUrl,
   rpcCallUrl,
@@ -19,10 +19,28 @@ import {
   reportCallUrls
 } from "../extension/rpc.js";
 
+const SAMPLE_FILTER = {
+  TZ: 3,
+  cube: "Вызовы",
+  displayType: "Таблица",
+  version: "1",
+  comparePeriodEnabled: false,
+  characteristics: [
+    { id: "Количество вызовов", order: null, range: {} },
+    { id: "Количество ошибок", order: "desc", range: { start: 1 } }
+  ],
+  dimensions: [
+    { id: "Метод_Метод", isAggregated: true, top: 100 },
+    { id: "time", isTimeDim: true, mode: "all_days", timePeriod: { start: "00:00", end: "23:59" }, timeStep: "day" },
+    { id: "Метод_Ответственный", values: ["Панов М.В.", "Гаврилов М.В."] }
+  ],
+  period: [{ start: "2026-08-25T11:10:00.000Z", end: "2026-08-26T11:10:00.000Z" }]
+};
+
 test("period is replaced in filter JSON", () => {
   const start = new Date("2026-08-25T11:10:00.000Z");
   const end = new Date("2026-08-26T11:10:00.000Z");
-  const next = applyPeriod(DEFAULT_FILTER_JSON, start, end);
+  const next = applyPeriod(SAMPLE_FILTER, start, end);
   assert.equal(next.period[0].start, "2026-08-25T11:10:00.000Z");
   assert.equal(next.period[0].end, "2026-08-26T11:10:00.000Z");
 });
@@ -37,19 +55,28 @@ test("applyPeriod does not crash on missing filter", () => {
 test("RPC period uses Moscow offset +03", () => {
   const start = new Date("2026-08-25T11:10:00.000Z");
   assert.equal(formatRpcDateTime(start), "2026-08-25 14:10:00+03");
-  const params = buildGetReportParams(DEFAULT_FILTER_JSON, start, new Date("2026-08-26T11:10:00.000Z"));
+  const params = buildGetReportParams(SAMPLE_FILTER, start, new Date("2026-08-26T11:10:00.000Z"));
   const period = params.Фильтр.d[0].d[7].d[0];
   assert.deepEqual(period, ["2026-08-25 14:10:00+03", "2026-08-26 14:10:00+03"]);
   assert.equal(params.Навигация.d[2], 0);
   assert.equal(params.Навигация.d[1], 50);
   const vertical = params.Фильтр.d[1].d[2];
-  const ownerRec = vertical.d[8];
+  const names = vertical.s.map((c) => c.n);
+  const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
   assert.deepEqual(ownerRec.s[0].n, "Filter");
   const filterValues = ownerRec.d[0];
   assert.equal(Array.isArray(filterValues), true);
   assert.equal(Array.isArray(filterValues[0]), false);
   assert.equal(typeof filterValues[0], "string");
   assert.ok(filterValues.includes("Панов М.В."));
+});
+
+test("empty filter template does not inject a cube or dimensions", () => {
+  const params = buildGetReportParams(EMPTY_FILTER_TEMPLATE, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
+  assert.equal(params.Фильтр.d[0].d[3], "");
+  assert.equal(params.Фильтр.d[0].d[4].d.length, 0);
+  assert.equal(params.Фильтр.d[0].d[1].d.length, 0);
+  assert.equal(params.Фильтр.d[1].d[2].d.length, 0);
 });
 
 test("numbers use space thousands separator", () => {
@@ -74,10 +101,12 @@ test("parse recordset and map columns like the stats table", () => {
   };
   const parsed = parseReportTable(result);
   const table = mapDisplayColumns(parsed.headers, parsed.rows);
-  assert.equal(table.headers[0], "Метод БЛ");
-  assert.equal(table.rows[0][0], "CoreV3.Collecting (Панов М.В.)");
-  assert.equal(table.rows[0][1], "6 364");
-  assert.equal(table.rows[0][2], "36");
+  assert.equal(table.headers[0], "Метод_Метод");
+  assert.equal(table.headers[1], "Метод_Ответственный");
+  assert.equal(table.headers[2], "Количество вызовов");
+  assert.equal(table.rows[0][0], "CoreV3.Collecting");
+  assert.equal(table.rows[0][2], "6 364");
+  assert.equal(table.rows[0][3], "36");
 });
 
 test("method name strips $$ composite key", () => {

@@ -6,7 +6,6 @@ import {
   extractSid,
   isPendingResult,
   isAuthError,
-  CHAR_COLUMNS,
   authCallUrls,
   reportCallUrls,
   rpcBody
@@ -190,7 +189,6 @@ export async function getReport({ standId, filter, filterId, start, end, onStatu
     page += 1;
   }
 
-  const charIds = (filterJson.characteristics || []).map((c) => c.id);
-  const table = mapDisplayColumns(headers, allRows, charIds.length ? charIds : CHAR_COLUMNS);
+  const table = mapDisplayColumns(headers, allRows);
   return { ok: true, table, raw: lastJson, stands, url: lastUrl };
 }

@@ -1,4 +1,4 @@
-import { DEFAULT_FILTER_JSON, mergeStands, normalizeFilterObject } from "./rpc.js";
+import { mergeStands, normalizeFilterObject } from "./rpc.js";
 
 const memory = {};
 
@@ -24,11 +24,7 @@ export async function loadState() {
   const data = await storeGet(["stands", "filters", "device", "lastReport", "selectedFilterId", "selectedStandId"]);
   const stands = mergeStands(data.stands);
   if (JSON.stringify(stands) !== JSON.stringify(data.stands)) await storeSet({ stands });
-  let filters = data.filters || [];
-  if (!filters.length) {
-    filters = [{ id: crypto.randomUUID(), name: "Ошибки по методам", json: structuredClone(DEFAULT_FILTER_JSON) }];
-    await storeSet({ filters });
-  }
+  const filters = Array.isArray(data.filters) ? data.filters : [];
   return {
     stands,
     filters,

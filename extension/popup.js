@@ -1,5 +1,5 @@
 import { loadState, saveStands, saveFilters, saveLastReport, saveSelection } from "./storage.js";
-import { DEFAULT_FILTER_JSON, methodDisplayName, reportFileName } from "./rpc.js";
+import { EMPTY_FILTER_TEMPLATE, methodDisplayName, reportFileName } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
@@ -177,7 +177,7 @@ $("filter-form").addEventListener("submit", async (e) => {
 $("filter-reset").addEventListener("click", () => {
   editingFilterId = null;
   $("filter-name").value = "";
-  $("filter-json").value = JSON.stringify(DEFAULT_FILTER_JSON, null, 2);
+  $("filter-json").value = JSON.stringify(EMPTY_FILTER_TEMPLATE, null, 2);
   $("filter-msg").hidden = true;
 });
 
@@ -237,18 +237,16 @@ $("btn-get-report").addEventListener("click", async () => {
 
 $("btn-download").addEventListener("click", async () => {
   if (!lastTable) return;
-  const rows = lastTable.rows.map((row) => {
-    const next = [...row];
-    if (next[0]) next[0] = methodDisplayName(next[0]);
-    return next;
-  });
-  const blob = await tableToPdfBlob("Отчёт по вызовам БЛ", lastTable.headers, rows);
+  const rows = lastTable.rows.map((row) =>
+    row.map((cell) => (typeof cell === "string" && cell.includes("$$") ? methodDisplayName(cell) : cell))
+  );
+  const filterName =
+    state.filters.find((f) => f.id === $("report-filter").value)?.name || state.lastReport?.filterName || "Отчёт";
+  const blob = await tableToPdfBlob(filterName, lastTable.headers, rows);
   const url = URL.createObjectURL(blob);
   const stand =
     state.stands.find((s) => s.id === $("report-stand").value) ||
     state.stands.find((s) => s.id === state.lastReport?.standId);
-  const filterName =
-    state.filters.find((f) => f.id === $("report-filter").value)?.name || state.lastReport?.filterName;
   const filename = reportFileName({ filterName, stand, date: new Date() });
   try {
     if (typeof chrome !== "undefined" && chrome.downloads?.download) {
@@ -275,7 +273,7 @@ function escapeAttr(s) {
 async function init() {
   state = await loadState();
   lastTable = state.lastReport?.table || null;
-  $("filter-json").value = JSON.stringify(DEFAULT_FILTER_JSON, null, 2);
+  $("filter-json").value = JSON.stringify(EMPTY_FILTER_TEMPLATE, null, 2);
   $("filter-name").value = "";
   editingFilterId = null;
   renderStands();

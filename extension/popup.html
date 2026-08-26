@@ -26,10 +26,10 @@
     </section>
 
     <section id="page-filters" class="page">
-      <p class="hint">Имя фильтра и JSON. Период при формировании отчёта подменяется.</p>
+      <p class="hint">Вставьте JSON фильтра из UI статистики. Расширение не подставляет свои измерения и характеристики — в RPC уходит то, что сохранено. Период при отчёте подменяется.</p>
       <form id="filter-form" class="card">
         <label>Название
-          <input id="filter-name" type="text" placeholder="Ошибки по методам" required />
+          <input id="filter-name" type="text" placeholder="Название фильтра" required />
         </label>
         <label>Фильтр (JSON)
           <textarea id="filter-json" spellcheck="false" required></textarea>

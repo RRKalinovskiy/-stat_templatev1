@@ -4,62 +4,17 @@ const DEFAULT_STANDS = [
   { id: "pre-test", host: "pre-test-cloud.sbis.ru", title: "PRE-TEST", login: "", password: "", synced: false, lastError: "" }
 ];
 
-export const DEFAULT_FILTER_JSON = {
+export const EMPTY_FILTER_TEMPLATE = {
   TZ: 3,
-  characteristics: [
-    { id: "Количество вызовов", order: null, range: {} },
-    { id: "Количество ошибок", order: "desc", range: { end: 99999999, start: 1 } },
-    { id: "Общая продолжительность (мс)", order: null, range: {} },
-    { id: "Максимальная продолжительность (мс)", order: null, range: {} },
-    { id: "Средняя продолжительность (мс)", order: null, range: {} },
-    { id: "Количество предупреждений", order: null, range: {} }
-  ],
-  cube: "Вызовы",
-  dimensions: [
-    { excluded: null, id: "Метод_Метод", isAggregated: true, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: 100, values: null },
-    { excluded: null, id: "time", isAggregated: false, isTimeDim: true, mode: "all_days", timePeriod: { end: "23:59", start: "00:00" }, timeStep: "day", top: 100, values: null },
-    { excluded: null, id: "Метод_МетодПсевдоним", isAggregated: false, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: null, values: null },
-    { excluded: null, id: "WEB-Сервис_Семейство", isAggregated: false, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: null, values: null },
-    { excluded: null, id: "WEB-Сервис_Приложение", isAggregated: false, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: null, values: null },
-    { excluded: null, id: "WEB-Сервис_Сервис", isAggregated: false, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: null, values: null },
-    { excluded: null, id: "WEB-Сервис_СистемноеИмя", isAggregated: false, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: null, values: null },
-    { excluded: null, id: "БилдСервиса_БилдСервиса", isAggregated: false, isTimeDim: null, mode: null, timePeriod: null, timeStep: null, top: null, values: null },
-    {
-      excluded: null,
-      id: "Метод_Ответственный",
-      isAggregated: false,
-      isTimeDim: null,
-      mode: null,
-      timePeriod: null,
-      timeStep: null,
-      top: null,
-      values: [
-        "Гаврилов М.В.",
-        "Давлетшин Д.М.",
-        "Лукьянов Н.Л.",
-        "Малышев С.В.",
-        "Мугинов Э.И.",
-        "Панов М.В.",
-        "Прозоркевич Д.А.",
-        "Рыженко Д.А."
-      ]
-    }
-  ],
+  characteristics: [],
+  cube: "",
+  dimensions: [],
   idParent: null,
   version: "1",
   comparePeriodEnabled: false,
-  period: [{ start: "2026-08-25T11:10:00.000Z", end: "2026-08-26T11:10:00.000Z" }],
+  period: [],
   displayType: "Таблица"
 };
-
-export const CHAR_COLUMNS = [
-  "Количество вызовов",
-  "Количество ошибок",
-  "Общая продолжительность (мс)",
-  "Максимальная продолжительность (мс)",
-  "Средняя продолжительность (мс)",
-  "Количество предупреждений"
-];
 
 export function defaultStands() {
   return structuredClone(DEFAULT_STANDS);
@@ -210,9 +165,12 @@ function verticalDimRecord(d, emptyRec) {
   const values = normalizeDimValues(d.values);
   const fields = [];
   const schema = [];
-  if (d.isAggregated || d.top != null) {
-    fields.push(1, d.top ?? 100);
+  if (typeof d.top === "number") {
+    fields.push(1, d.top);
     schema.push({ t: "Число целое", n: "Position" }, { t: "Число целое", n: "Top" });
+  } else if (d.isAggregated) {
+    fields.push(1);
+    schema.push({ t: "Число целое", n: "Position" });
   }
   if (values) {
     fields.push(values);
@@ -302,9 +260,9 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       tz,
       rs(2, charD, charS),
       !!f.comparePeriodEnabled,
-      f.cube || "Вызовы",
+      f.cube ?? "",
       rs(3, dimD, dimS),
-      f.displayType || "Таблица",
+      f.displayType ?? "Таблица",
       f.idParent ?? null,
       periodRs,
       String(f.version ?? "1")
@@ -332,8 +290,8 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       formatRuTime(start),
       formatRuDate(end),
       formatRuDate(start),
-      f.cube || "Вызовы",
-      f.displayType || "Таблица",
+      f.cube ?? "",
+      f.displayType ?? "Таблица",
       charsAnalysis
     ],
     [
@@ -561,24 +519,20 @@ export function methodDisplayName(rawMethod, rawOwner = "") {
   return method;
 }
 
-export function mapDisplayColumns(headers, rows, characteristicIds = CHAR_COLUMNS) {
-  const methodIdx = headers.findIndex((h) => /Метод_Метод$/.test(h) || h === "Метод");
-  const ownerIdx = headers.findIndex((h) => /Ответственный/.test(h));
-  const charIdx = characteristicIds.map((name) => headers.findIndex((h) => h === name));
-  const missingChars = charIdx.every((i) => i < 0);
-
-  const outHeaders = ["Метод БЛ", ...characteristicIds];
-  const outRows = rows.map((row) => {
-    const method = methodIdx >= 0 ? row[methodIdx] : row[0];
+function formatCell(value, row, headers) {
+  if (typeof value === "string" && value.includes("$$")) {
+    const ownerIdx = headers.findIndex((h) => /Ответственный/.test(h));
     const owner = ownerIdx >= 0 ? row[ownerIdx] : "";
-    const title = methodDisplayName(method, owner);
-    if (missingChars) {
-      const rest = row.slice(methodIdx >= 0 ? 1 : 1).map((v) => formatNumber(v));
-      return [title, ...characteristicIds.map((_, n) => rest[n] ?? "")];
-    }
-    return [title, ...charIdx.map((i) => (i >= 0 ? formatNumber(row[i]) : ""))];
-  });
-  return { headers: outHeaders, rows: outRows };
+    return methodDisplayName(value, owner);
+  }
+  if (typeof value === "number") return formatNumber(value);
+  if (value == null) return "";
+  return String(value);
+}
+
+export function mapDisplayColumns(headers, rows) {
+  const outRows = rows.map((row) => headers.map((_, i) => formatCell(row[i], row, headers)));
+  return { headers: [...headers], rows: outRows };
 }
 
 export function isPendingResult(json) {
