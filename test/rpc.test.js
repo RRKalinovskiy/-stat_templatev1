@@ -7,6 +7,7 @@ import {
   formatRpcDateTime,
   parseReportTable,
   mapDisplayColumns,
+  methodDisplayName,
   extractSid,
   DEFAULT_FILTER_JSON,
   authServiceUrl,
@@ -68,6 +69,17 @@ test("parse recordset and map columns like the stats table", () => {
   assert.equal(table.rows[0][0], "CoreV3.Collecting (Панов М.В.)");
   assert.equal(table.rows[0][1], "6 364");
   assert.equal(table.rows[0][2], "36");
+});
+
+test("method name strips $$ composite key", () => {
+  assert.equal(methodDisplayName("CoreV3.Collecting$$Панов М.В.", "Панов М.В."), "CoreV3.Collecting (Панов М.В.)");
+  assert.equal(methodDisplayName("CoreV3.Collecting$$Панов М.В.", ""), "CoreV3.Collecting (Панов М.В.)");
+  assert.equal(methodDisplayName("CRMClients.ListClientsOnline$$Гаврилов М.В."), "CRMClients.ListClientsOnline (Гаврилов М.В.)");
+  const table = mapDisplayColumns(
+    ["Метод_Метод", "Количество вызовов"],
+    [["CoreV3.Collecting$$Панов М.В.", 10]]
+  );
+  assert.equal(table.rows[0][0], "CoreV3.Collecting (Панов М.В.)");
 });
 
 test("auth and report endpoints match stand services without srv=1", () => {

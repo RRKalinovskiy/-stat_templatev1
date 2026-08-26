@@ -1,5 +1,5 @@
 import { loadState, saveStands, saveFilters, saveLastReport } from "./storage.js";
-import { DEFAULT_FILTER_JSON } from "./rpc.js";
+import { DEFAULT_FILTER_JSON, methodDisplayName } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
@@ -223,7 +223,12 @@ $("btn-get-report").addEventListener("click", async () => {
 
 $("btn-download").addEventListener("click", async () => {
   if (!lastTable) return;
-  const blob = await tableToPdfBlob("Отчёт по вызовам БЛ", lastTable.headers, lastTable.rows);
+  const rows = lastTable.rows.map((row) => {
+    const next = [...row];
+    if (next[0]) next[0] = methodDisplayName(next[0]);
+    return next;
+  });
+  const blob = await tableToPdfBlob("Отчёт по вызовам БЛ", lastTable.headers, rows);
   const url = URL.createObjectURL(blob);
   const filename = `stats-report-${Date.now()}.pdf`;
   try {

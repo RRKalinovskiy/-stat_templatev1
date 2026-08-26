@@ -477,6 +477,18 @@ export function extractSid(result) {
   return null;
 }
 
+export function methodDisplayName(rawMethod, rawOwner = "") {
+  const source = String(rawMethod ?? "");
+  const [methodPart, ownerFromKey] = source.split("$$");
+  const method = (methodPart || source).trim();
+  const owner = String(rawOwner || ownerFromKey || "")
+    .replace(/^\(+/, "")
+    .replace(/\)+$/, "")
+    .trim();
+  if (owner && !method.includes(`(${owner})`)) return `${method} (${owner})`;
+  return method;
+}
+
 export function mapDisplayColumns(headers, rows, characteristicIds = CHAR_COLUMNS) {
   const methodIdx = headers.findIndex((h) => /Метод_Метод$/.test(h) || h === "Метод");
   const ownerIdx = headers.findIndex((h) => /Ответственный/.test(h));
@@ -487,7 +499,7 @@ export function mapDisplayColumns(headers, rows, characteristicIds = CHAR_COLUMN
   const outRows = rows.map((row) => {
     const method = methodIdx >= 0 ? row[methodIdx] : row[0];
     const owner = ownerIdx >= 0 ? row[ownerIdx] : "";
-    const title = owner ? `${method} (${owner})` : String(method ?? "");
+    const title = methodDisplayName(method, owner);
     if (missingChars) {
       const rest = row.slice(methodIdx >= 0 ? 1 : 1).map((v) => formatNumber(v));
       return [title, ...characteristicIds.map((_, n) => rest[n] ?? "")];
