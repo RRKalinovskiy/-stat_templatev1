@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Saby Stats</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="logo">Saby Stats</div>
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-page="stands" type="button">Стенды</button>
+      <button class="tab" data-page="filters" type="button">Фильтры</button>
+      <button class="tab" data-page="report" type="button">Отчёт</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="page-stands" class="page is-active">
+      <p class="hint">Логин и пароль для SAP.Authenticate. Запросы идут через текущее подключение (VPN / внутренний DNS).</p>
+      <div id="stands-list"></div>
+    </section>
+
+    <section id="page-filters" class="page">
+      <p class="hint">Имя фильтра и JSON. Период при формировании отчёта подменяется.</p>
+      <form id="filter-form" class="card">
+        <label>Название
+          <input id="filter-name" type="text" placeholder="Ошибки по методам" required />
+        </label>
+        <label>Фильтр (JSON)
+          <textarea id="filter-json" spellcheck="false" required></textarea>
+        </label>
+        <div class="row-actions">
+          <button type="submit" class="btn primary">Сохранить фильтр</button>
+          <button type="button" id="filter-reset" class="btn ghost">Новый</button>
+        </div>
+        <p id="filter-msg" class="msg" hidden></p>
+      </form>
+      <div id="filters-list"></div>
+    </section>
+
+    <section id="page-report" class="page">
+      <p class="hint">Выберите фильтр и период — значения period в JSON будут подставлены автоматически.</p>
+      <div class="card">
+        <label>Стенд
+          <select id="report-stand"></select>
+        </label>
+        <label>Отчёт / фильтр
+          <select id="report-filter"></select>
+        </label>
+        <div class="dt-grid">
+          <label>Начало
+            <input id="report-start" type="datetime-local" />
+          </label>
+          <label>Конец
+            <input id="report-end" type="datetime-local" />
+          </label>
+        </div>
+        <button type="button" id="btn-get-report" class="btn primary block">Получить отчёт</button>
+        <p id="report-status" class="status">Ожидание запроса</p>
+        <button type="button" id="btn-download" class="btn accent block" hidden>Скачать отчёт</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

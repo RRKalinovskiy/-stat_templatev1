@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Saby Stats — превью макета</title>
+  <link rel="stylesheet" href="popup.css" />
+  <style>
+    body { width: auto; min-height: 100vh; display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; align-items: flex-start; }
+    .phone { width: 420px; background: #1e2732; border: 1px solid #3d4d61; box-shadow: 0 8px 24px #0006; }
+    h2 { width: 100%; color: #9aa8b8; font-size: 14px; margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="phone" id="p1"></div>
+  <div class="phone" id="p2"></div>
+  <div class="phone" id="p3"></div>
+  <script>
+    fetch("popup.html").then(r => r.text()).then(html => {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const clone = () => {
+        const wrap = document.createElement("div");
+        wrap.innerHTML = doc.querySelector("header").outerHTML + doc.querySelector("main").outerHTML;
+        return wrap;
+      };
+      const fill = (root, page, tabIdx) => {
+        const node = clone();
+        node.querySelectorAll(".tab").forEach((t,i) => t.classList.toggle("is-active", i===tabIdx));
+        node.querySelectorAll(".page").forEach((p) => p.classList.toggle("is-active", p.id===page));
+        root.appendChild(node);
+      };
+      fill(document.getElementById("p1"), "page-stands", 0);
+      fill(document.getElementById("p2"), "page-filters", 1);
+      fill(document.getElementById("p3"), "page-report", 2);
+      document.querySelector("#p1 #stands-list").innerHTML = `
+        <div class="stand-card"><div class="stand-title"><span>FIX · fix-cloud.sbis.ru</span><span class="badge ok">синхронизирован</span></div>
+        <label>Логин<input value="Viewer"></label><label>Пароль<input type="password" value="********"></label>
+        <button class="btn primary block">Синхронизировать</button></div>
+        <div class="stand-card"><div class="stand-title"><span>TEST · test-cloud.sbis.ru</span><span class="badge">нет сессии</span></div>
+        <label>Логин<input></label><label>Пароль<input type="password"></label>
+        <button class="btn primary block">Синхронизировать</button></div>
+        <div class="stand-card"><div class="stand-title"><span>PRE · pre-cloud.sbis.ru</span><span class="badge">нет сессии</span></div>
+        <label>Логин<input></label><label>Пароль<input type="password"></label>
+        <button class="btn primary block">Синхронизировать</button></div>`;
+      document.querySelector("#p2 #filter-name").value = "Ошибки по методам";
+      document.querySelector("#p2 #filter-json").value = JSON.stringify({cube:"Вызовы",displayType:"Таблица",TZ:3}, null, 2);
+      document.querySelector("#p2 #filters-list").innerHTML = `<div class="filter-item"><div class="name">Ошибки по методам</div><div class="actions"><button class="btn ghost small">Изменить</button><button class="btn ghost small">Удалить</button></div></div>`;
+      const r = document.querySelector("#p3");
+      r.querySelector("#report-stand").innerHTML = `<option>FIX (fix-cloud.sbis.ru)</option>`;
+      r.querySelector("#report-filter").innerHTML = `<option>Ошибки по методам</option>`;
+      r.querySelector("#report-start").value = "2026-08-25T14:10";
+      r.querySelector("#report-end").value = "2026-08-26T14:10";
+      r.querySelector("#report-status").className = "status ok";
+      r.querySelector("#report-status").textContent = "Готово: 12 строк. Можно скачать PDF.";
+      r.querySelector("#btn-download").hidden = false;
+    });
+  </script>
+</body>
+</html>
