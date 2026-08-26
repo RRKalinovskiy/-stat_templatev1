@@ -1,5 +1,5 @@
 import { loadState, saveStands, saveFilters, saveLastReport } from "./storage.js";
-import { DEFAULT_FILTER_JSON, methodDisplayName } from "./rpc.js";
+import { DEFAULT_FILTER_JSON, methodDisplayName, reportFileName } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
@@ -209,7 +209,12 @@ $("btn-get-report").addEventListener("click", async () => {
       return;
     }
     lastTable = res.table;
-    await saveLastReport({ table: lastTable, at: new Date().toISOString(), filterName: filter.name });
+    await saveLastReport({
+      table: lastTable,
+      at: new Date().toISOString(),
+      filterName: filter.name,
+      standId: $("report-stand").value
+    });
     status.className = "status ok";
     status.textContent = `Готово: ${lastTable.rows.length} строк. Можно скачать PDF.`;
     download.hidden = false;
@@ -230,7 +235,12 @@ $("btn-download").addEventListener("click", async () => {
   });
   const blob = await tableToPdfBlob("Отчёт по вызовам БЛ", lastTable.headers, rows);
   const url = URL.createObjectURL(blob);
-  const filename = `stats-report-${Date.now()}.pdf`;
+  const stand =
+    state.stands.find((s) => s.id === $("report-stand").value) ||
+    state.stands.find((s) => s.id === state.lastReport?.standId);
+  const filterName =
+    state.filters.find((f) => f.id === $("report-filter").value)?.name || state.lastReport?.filterName;
+  const filename = reportFileName({ filterName, stand, date: new Date() });
   try {
     if (typeof chrome !== "undefined" && chrome.downloads?.download) {
       await chrome.downloads.download({ url, filename, saveAs: true });

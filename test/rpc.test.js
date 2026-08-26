@@ -8,6 +8,7 @@ import {
   parseReportTable,
   mapDisplayColumns,
   methodDisplayName,
+  reportFileName,
   extractSid,
   DEFAULT_FILTER_JSON,
   authServiceUrl,
@@ -106,6 +107,15 @@ test("auth and report endpoints match stand services without srv=1", () => {
     reportCallUrls("fix-cloud.sbis.ru")[0],
     "https://fix-cloud.sbis.ru/stats-cloud-interface/service/?id=1&protocol=7"
   );
+});
+
+test("report file name is filter (stand) date", () => {
+  const name = reportFileName({
+    filterName: "Ошибки по методам",
+    stand: { id: "fix", host: "fix-cloud.sbis.ru" },
+    date: new Date("2026-08-26T12:00:00+03:00")
+  });
+  assert.equal(name, "Ошибки по методам (fix) 26-08-26.pdf");
 });
 
 test("extract sid from auth record", () => {

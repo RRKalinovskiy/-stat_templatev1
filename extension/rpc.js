@@ -102,6 +102,30 @@ export function formatRuTime(date) {
   return `${p.h}:${p.min}`;
 }
 
+export function standShortName(stand) {
+  if (!stand) return "stand";
+  if (typeof stand === "string") {
+    const s = stand.toLowerCase();
+    if (s.includes(".")) return s.replace(/-cloud\.sbis\.ru.*$/, "").replace(/\.sbis\.ru.*$/, "");
+    return s;
+  }
+  if (stand.id) return String(stand.id).toLowerCase();
+  return standShortName(stand.host || stand.title || "stand");
+}
+
+export function sanitizeFileName(name) {
+  return String(name || "Отчёт")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "Отчёт";
+}
+
+export function reportFileName({ filterName, stand, date = new Date() }) {
+  const p = toMoscowParts(date);
+  const stamp = `${p.d}-${p.m}-${p.y.slice(2)}`;
+  return `${sanitizeFileName(filterName)} (${standShortName(stand)}) ${stamp}.pdf`;
+}
+
 function rec(f, d, s) {
   return { d, s, _type: "record", f };
 }
