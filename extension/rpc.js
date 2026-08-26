@@ -96,6 +96,56 @@ export function formatRpcDateTime(date) {
   return `${p.y}-${p.m}-${p.d} ${p.h}:${p.min}:${p.s}+03`;
 }
 
+export function parseMoscowDateTimeLocal(value) {
+  const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] || "00"}+03:00`);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function toDateTimeLocalMoscow(date) {
+  if (!date || Number.isNaN(date.getTime())) return "";
+  const p = toMoscowParts(date);
+  return `${p.y}-${p.m}-${p.d}T${p.h}:${p.min}`;
+}
+
+export function parsePeriodValue(value) {
+  if (value == null || value === "") return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const s = String(value);
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)/);
+  if (iso) {
+    const raw = iso[1];
+    const d = /Z|[+-]\d{2}:\d{2}$/.test(raw) ? new Date(raw) : parseMoscowDateTimeLocal(raw.replace(" ", "T").slice(0, 16));
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function periodFromFilter(filter) {
+  const f = normalizeFilterObject(filter);
+  const p = f?.period;
+  const pick = (start, end) => {
+    const a = parsePeriodValue(start);
+    const b = parsePeriodValue(end);
+    if (!a || !b) return null;
+    return { start: a, end: b };
+  };
+  if (Array.isArray(p) && p.length) {
+    const row = p[0];
+    if (Array.isArray(row)) return pick(row[0], row[1]);
+    if (row && typeof row === "object") return pick(row.start ?? row.Начало, row.end ?? row.Конец);
+  }
+  if (p && typeof p === "object" && !Array.isArray(p)) return pick(p.start ?? p.Начало, p.end ?? p.Конец);
+  return null;
+}
+
+function looksLikeDateValue(value) {
+  const s = String(value ?? "");
+  return /^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{2}\.\d{2}\.\d{2,4}/.test(s);
+}
+
 export function formatRuDate(date) {
   const p = toMoscowParts(date);
   return `${p.d}.${p.m}.${p.y.slice(2)}`;
@@ -161,6 +211,18 @@ export function applyPeriod(filter, start, end) {
   }
   const next = JSON.parse(JSON.stringify(base));
   next.period = [{ start: start.toISOString(), end: end.toISOString() }];
+  next.idParent = null;
+  if (Array.isArray(next.dimensions)) {
+    next.dimensions = next.dimensions.map((d) => {
+      if (!(d.isTimeDim === true || d.id === "time")) return d;
+      const copy = { ...d };
+      if (Array.isArray(copy.values) && copy.values.some((v) => looksLikeDateValue(v))) copy.values = null;
+      if (Array.isArray(copy.valuesCompare) && copy.valuesCompare.some((v) => looksLikeDateValue(v))) {
+        copy.valuesCompare = null;
+      }
+      return copy;
+    });
+  }
   return next;
 }
 
@@ -227,6 +289,8 @@ function verticalDimRecord(d, emptyRec) {
 
 export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50) {
   const f = applyPeriod(filter, start, end);
+  const startDate = new Date(f.period[0].start);
+  const endDate = new Date(f.period[0].end);
   const tz = f.TZ ?? 3;
   const dimensions = f.dimensions || [];
 
@@ -266,7 +330,7 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
 
   const periodRs = rs(
     4,
-    [[formatRpcDateTime(start), formatRpcDateTime(end)]],
+    [[formatRpcDateTime(startDate), formatRpcDateTime(endDate)]],
     [
       { t: "Дата и время", n: "start" },
       { t: "Дата и время", n: "end" }
@@ -305,7 +369,7 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       f.cube ?? "",
       rs(3, dimD, dimS),
       f.displayType ?? "Таблица",
-      typeof f.idParent === "string" ? f.idParent : null,
+      null,
       periodRs,
       String(f.version ?? "1")
     ],
@@ -328,10 +392,10 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       tz,
       1,
       vertical,
-      formatRuTime(end),
-      formatRuTime(start),
-      formatRuDate(end),
-      formatRuDate(start),
+      formatRuTime(endDate),
+      formatRuTime(startDate),
+      formatRuDate(endDate),
+      formatRuDate(startDate),
       f.cube ?? "",
       f.displayType ?? "Таблица",
       charsAnalysis

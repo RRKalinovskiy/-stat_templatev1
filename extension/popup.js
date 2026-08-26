@@ -1,5 +1,5 @@
 import { loadState, saveStands, saveFilters, saveLastReport, saveSelection } from "./storage.js";
-import { EMPTY_FILTER_TEMPLATE, methodDisplayName, reportFileName } from "./rpc.js";
+import { EMPTY_FILTER_TEMPLATE, methodDisplayName, reportFileName, parseMoscowDateTimeLocal, toDateTimeLocalMoscow, periodFromFilter, formatRpcDateTime } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
@@ -132,16 +132,21 @@ function renderReportSelects() {
   if (lastTable?.rows?.length) download.hidden = false;
 }
 
+function fillPeriodFields(filterJson) {
+  const fromFilter = periodFromFilter(filterJson);
+  if (fromFilter) {
+    $("report-start").value = toDateTimeLocalMoscow(fromFilter.start);
+    $("report-end").value = toDateTimeLocalMoscow(fromFilter.end);
+    return;
+  }
+  defaultRange();
+}
+
 function defaultRange() {
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-  const toLocal = (d) => {
-    const off = d.getTimezoneOffset();
-    const local = new Date(d.getTime() - off * 60000);
-    return local.toISOString().slice(0, 16);
-  };
-  $("report-start").value = toLocal(start);
-  $("report-end").value = toLocal(end);
+  $("report-start").value = toDateTimeLocalMoscow(start);
+  $("report-end").value = toDateTimeLocalMoscow(end);
 }
 
 $("filter-form").addEventListener("submit", async (e) => {
@@ -192,15 +197,15 @@ $("btn-get-report").addEventListener("click", async () => {
     status.textContent = "Сохраните фильтр на вкладке «Фильтры»";
     return;
   }
-  const start = new Date($("report-start").value);
-  const end = new Date($("report-end").value);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  const start = parseMoscowDateTimeLocal($("report-start").value);
+  const end = parseMoscowDateTimeLocal($("report-end").value);
+  if (!start || !end) {
     status.className = "status err";
     status.textContent = "Укажите корректные дату и время";
     return;
   }
   status.className = "status busy";
-  status.textContent = `Запрос «${filter.name}»…`;
+  status.textContent = `Запрос «${filter.name}» ${formatRpcDateTime(start)} — ${formatRpcDateTime(end)}…`;
   $("btn-get-report").disabled = true;
   try {
     const res = await callBg({
@@ -279,7 +284,9 @@ async function init() {
   renderStands();
   renderFilters();
   renderReportSelects();
-  defaultRange();
+  const selected = state.filters.find((f) => f.id === (state.selectedFilterId || $("report-filter").value));
+  if (selected) fillPeriodFields(selected.json);
+  else defaultRange();
   $("report-stand").addEventListener("change", () => {
     state.selectedStandId = $("report-stand").value;
     saveSelection({ selectedStandId: state.selectedStandId });
@@ -287,6 +294,8 @@ async function init() {
   $("report-filter").addEventListener("change", () => {
     state.selectedFilterId = $("report-filter").value;
     saveSelection({ selectedFilterId: state.selectedFilterId });
+    const selected = state.filters.find((f) => f.id === state.selectedFilterId);
+    if (selected) fillPeriodFields(selected.json);
   });
   if (lastTable) {
     $("report-status").className = "status ok";

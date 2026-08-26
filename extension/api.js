@@ -6,6 +6,8 @@ import {
   extractSid,
   isPendingResult,
   isAuthError,
+  parsePeriodValue,
+  periodFromFilter,
   authCallUrls,
   reportCallUrls,
   rpcBody
@@ -147,8 +149,14 @@ export async function getReport({ standId, filter, filterId, start, end, onStatu
   if (!filterJson) throw new Error("Некорректный JSON фильтра");
 
   const urls = reportCallUrls(stand.host);
-  const startDate = new Date(start);
-  const endDate = new Date(end);
+  let startDate = parsePeriodValue(start);
+  let endDate = parsePeriodValue(end);
+  if (!startDate || !endDate) {
+    const fromFilter = periodFromFilter(filterJson);
+    startDate = startDate || fromFilter?.start;
+    endDate = endDate || fromFilter?.end;
+  }
+  if (!startDate || !endDate) throw new Error("Не задан период отчёта");
   const allRows = [];
   let headers = [];
   let page = 0;

@@ -5,6 +5,9 @@ import {
   buildGetReportParams,
   formatNumber,
   formatRpcDateTime,
+  parseMoscowDateTimeLocal,
+  toDateTimeLocalMoscow,
+  periodFromFilter,
   parseReportTable,
   mapDisplayColumns,
   methodDisplayName,
@@ -44,6 +47,30 @@ test("period is replaced in filter JSON", () => {
   const next = applyPeriod(SAMPLE_FILTER, start, end);
   assert.equal(next.period[0].start, "2026-08-25T11:10:00.000Z");
   assert.equal(next.period[0].end, "2026-08-26T11:10:00.000Z");
+});
+
+test("form period overrides filter JSON and drops time-dimension dates", () => {
+  const filter = {
+    cube: "Вызовы",
+    idParent: "saved-preset",
+    period: [{ start: "2026-08-01T00:00:00.000Z", end: "2026-08-02T00:00:00.000Z" }],
+    dimensions: [
+      { id: "time", isTimeDim: true, values: ["2026-08-01", "2026-08-02"], timeStep: "day" },
+      { id: "Метод_Метод", isAggregated: true, top: 10 }
+    ],
+    characteristics: []
+  };
+  const start = parseMoscowDateTimeLocal("2026-08-20T00:00");
+  const end = parseMoscowDateTimeLocal("2026-08-21T00:00");
+  const params = buildGetReportParams(filter, start, end);
+  const period = params.Фильтр.d[0].d[7].d[0];
+  assert.deepEqual(period, ["2026-08-20 00:00:00+03", "2026-08-21 00:00:00+03"]);
+  assert.equal(params.Фильтр.d[0].d[6], null);
+  const dimRows = params.Фильтр.d[0].d[4].d;
+  const timeRow = dimRows.find((r) => r[0] === "time");
+  assert.equal(timeRow[3], null);
+  assert.equal(periodFromFilter(filter).start.toISOString(), "2026-08-01T00:00:00.000Z");
+  assert.equal(toDateTimeLocalMoscow(start), "2026-08-20T00:00");
 });
 
 test("applyPeriod does not crash on missing filter", () => {
