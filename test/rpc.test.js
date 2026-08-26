@@ -69,6 +69,36 @@ test("RPC period uses Moscow offset +03", () => {
   assert.equal(Array.isArray(filterValues[0]), false);
   assert.equal(typeof filterValues[0], "string");
   assert.ok(filterValues.includes("Панов М.В."));
+  assert.equal(ownerRec.s.some((c) => c.n === "Position"), false);
+  assert.equal(ownerRec.f, 9);
+  const methodRec = vertical.d[names.indexOf("Метод_Метод")];
+  assert.deepEqual(methodRec.s.map((c) => c.n), ["Position", "Top"]);
+  assert.equal(methodRec.f, 8);
+  assert.deepEqual(methodRec.d, [1, 100]);
+});
+
+test("owner dimension with UI top:100 still sends Filter, not Position", () => {
+  const filter = {
+    cube: "Вызовы",
+    dimensions: [
+      { id: "Метод_Метод", isAggregated: true, top: 100 },
+      {
+        id: "Метод_Ответственный",
+        isAggregated: false,
+        top: 100,
+        values: ["Панов М.В.", "Гаврилов М.В."]
+      }
+    ],
+    characteristics: [{ id: "Количество ошибок", range: { start: 1 } }]
+  };
+  const params = buildGetReportParams(filter, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
+  const vertical = params.Фильтр.d[1].d[2];
+  const names = vertical.s.map((c) => c.n);
+  const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
+  assert.equal(ownerRec.s[0].n, "Filter");
+  assert.equal(ownerRec.s.some((c) => c.n === "Position"), false);
+  assert.equal(typeof ownerRec.d[0][0], "string");
+  assert.equal(ownerRec.f, 9);
 });
 
 test("empty filter template does not inject a cube or dimensions", () => {

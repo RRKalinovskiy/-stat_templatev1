@@ -163,25 +163,34 @@ function isTimeDimension(d) {
 function verticalDimRecord(d, emptyRec) {
   if (!d || isTimeDimension(d)) return emptyRec;
   const values = normalizeDimValues(d.values);
-  const fields = [];
-  const schema = [];
-  if (typeof d.top === "number") {
-    fields.push(1, d.top);
-    schema.push({ t: "Число целое", n: "Position" }, { t: "Число целое", n: "Top" });
-  } else if (d.isAggregated) {
-    fields.push(1);
-    schema.push({ t: "Число целое", n: "Position" });
+  const excluded = d.excluded === true;
+
+  // Filter dimensions (owners, aliases, …) use record format 9: Filter/Excluded only.
+  // UI JSON often has top: 100 on those dims; Position there makes the server
+  // parse the name list as Int64.
+  if (values || excluded) {
+    const fields = [];
+    const schema = [];
+    if (values) {
+      fields.push(values);
+      schema.push({ t: { n: "Массив", t: "Строка" }, n: "Filter" });
+    }
+    if (excluded) {
+      fields.push(true);
+      schema.push({ t: "Логическое", n: "Excluded" });
+    }
+    return rec(9, fields, schema);
   }
-  if (values) {
-    fields.push(values);
-    schema.push({ t: { n: "Массив", t: "Строка" }, n: "Filter" });
+
+  if (d.isAggregated === true) {
+    const top = typeof d.top === "number" ? d.top : 100;
+    return rec(8, [1, top], [
+      { t: "Число целое", n: "Position" },
+      { t: "Число целое", n: "Top" }
+    ]);
   }
-  if (d.excluded === true) {
-    fields.push(true);
-    schema.push({ t: "Логическое", n: "Excluded" });
-  }
-  if (!schema.length) return emptyRec;
-  return rec(7, fields, schema);
+
+  return emptyRec;
 }
 
 export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50) {
