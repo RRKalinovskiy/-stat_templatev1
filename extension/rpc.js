@@ -270,14 +270,29 @@ function verticalAggRecord(d) {
   ]);
 }
 
+function verticalFilterRecord(d) {
+  const values = normalizeDimValues(d.values);
+  const fields = [];
+  const schema = [];
+  if (values) {
+    fields.push(values);
+    schema.push({ t: { n: "Массив", t: "Строка" }, n: "Filter" });
+  }
+  if (d.excluded === true) {
+    fields.push(true);
+    schema.push({ t: "Логическое", n: "Excluded" });
+  }
+  return rec(9, fields, schema);
+}
+
 function verticalDimRecord(d, emptyRec) {
   if (!d) return emptyRec;
   if (isTimeDimension(d)) {
-    // Row grouping by time only when time is the aggregated dimension.
-    // Otherwise time f:8 turns the report into daily totals instead of methods.
     if (d.isAggregated === true) return verticalTimeRecord(d);
     return emptyRec;
   }
+  const values = normalizeDimValues(d.values);
+  if (values || d.excluded === true) return verticalFilterRecord(d);
   if (d.isAggregated === true) return verticalAggRecord(d);
   return emptyRec;
 }
@@ -342,10 +357,19 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
   );
 
   const charsAnalysis = rec(
-    9,
+    10,
     (f.characteristics || []).map((c) => {
+      const range = c.range || {};
+      const hasRange = range.start != null || range.end != null;
+      if (hasRange) {
+        return rec(12, [range.end ?? null, range.start ?? null, c.order === "desc"], [
+          { t: "Число целое", n: "Higher" },
+          { t: "Число целое", n: "Lower" },
+          { t: "Логическое", n: "Top" }
+        ]);
+      }
       if (c.order === "desc") {
-        return rec(10, [true], [{ t: "Логическое", n: "Top" }]);
+        return rec(11, [true], [{ t: "Логическое", n: "Top" }]);
       }
       return emptyRec;
     }),

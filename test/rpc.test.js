@@ -96,20 +96,21 @@ test("RPC period uses Moscow offset +03", () => {
   const timeRec = vertical.d[names.indexOf("time")];
   assert.equal(timeRec.f, 7);
   const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
-  assert.equal(ownerRec.f, 7);
-  assert.deepEqual(ownerRec.d, []);
+  assert.equal(ownerRec.f, 9);
+  assert.deepEqual(ownerRec.s[0].n, "Filter");
+  assert.ok(ownerRec.d[0].includes("Панов М.В."));
   const methodRec = vertical.d[names.indexOf("Метод_Метод")];
   assert.equal(methodRec.f, 8);
   assert.deepEqual(methodRec.s.map((c) => c.n), ["Position", "Top"]);
   assert.deepEqual(methodRec.d, [1, 100]);
   const charsAnalysis = params.Фильтр.d[1].d[9];
-  assert.equal(charsAnalysis.f, 9);
+  assert.equal(charsAnalysis.f, 10);
   const errSlot = charsAnalysis.d[charsAnalysis.s.findIndex((c) => c.n === "Количество ошибок")];
-  assert.equal(errSlot.f, 10);
-  assert.deepEqual(errSlot.d, [true]);
+  assert.equal(errSlot.f, 12);
+  assert.equal(errSlot.d[1], 1);
 });
 
-test("owner values stay in UI dimensions, vertical owner slot is empty", () => {
+test("owner values go to UI dimensions and vertical Filter", () => {
   const filter = {
     cube: "Вызовы",
     dimensions: [
@@ -130,7 +131,8 @@ test("owner values stay in UI dimensions, vertical owner slot is empty", () => {
   const vertical = params.Фильтр.d[1].d[2];
   const names = vertical.s.map((c) => c.n);
   const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
-  assert.equal(ownerRec.f, 7);
+  assert.equal(ownerRec.f, 9);
+  assert.deepEqual(ownerRec.d[0], ["Панов М.В.", "Гаврилов М.В."]);
 });
 
 test("empty filter template has no vertical slots", () => {
@@ -307,15 +309,19 @@ test("custom cube filter maps empty values, excluded aliases, and object list", 
   assert.ok(names.includes("WEB-Сервис_Локальный стенд"));
   const objectRow = dimRows.find((r) => r[0] === "Метод_Объект");
   assert.deepEqual(objectRow[3], ["Trigger", "Service"]);
+  const objectRec = vertical.d[names.indexOf("Метод_Объект")];
+  assert.equal(objectRec.f, 9);
+  assert.deepEqual(objectRec.d[0], ["Trigger", "Service"]);
   const timeRec = vertical.d[names.indexOf("time")];
   assert.equal(timeRec.f, 7);
   const methodRec = vertical.d[names.indexOf("Метод_Метод")];
   assert.equal(methodRec.f, 8);
   assert.deepEqual(methodRec.d, [1, 100]);
   const aliasRec = vertical.d[names.indexOf("Метод_МетодПсевдоним")];
-  assert.equal(aliasRec.f, 7);
-  const localRow = dimRows.find((r) => r[0] === "WEB-Сервис_Локальный стенд");
-  assert.deepEqual(localRow[3], ["0"]);
+  assert.equal(aliasRec.f, 9);
+  assert.equal(aliasRec.s.some((c) => c.n === "Excluded"), true);
+  const localRec = vertical.d[names.indexOf("WEB-Сервис_Локальный стенд")];
+  assert.deepEqual(localRec.d[0], ["0"]);
 });
 
 test("tree-shaped GetReport rows drop service columns", () => {
