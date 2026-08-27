@@ -262,8 +262,23 @@ function verticalTimeRecord(d) {
   ]);
 }
 
+function verticalAggRecord(d) {
+  const top = typeof d.top === "number" ? d.top : 100;
+  return rec(8, [1, top], [
+    { t: "Число целое", n: "Position" },
+    { t: "Число целое", n: "Top" }
+  ]);
+}
+
 function verticalDimRecord(d, emptyRec) {
-  if (isTimeDimension(d)) return verticalTimeRecord(d);
+  if (!d) return emptyRec;
+  if (isTimeDimension(d)) {
+    // Row grouping by time only when time is the aggregated dimension.
+    // Otherwise time f:8 turns the report into daily totals instead of methods.
+    if (d.isAggregated === true) return verticalTimeRecord(d);
+    return emptyRec;
+  }
+  if (d.isAggregated === true) return verticalAggRecord(d);
   return emptyRec;
 }
 
@@ -623,7 +638,16 @@ function isTechnicalHeader(name) {
   return TECHNICAL_HEADERS.test(h) || /^idParent[@$]?$/.test(h);
 }
 
-function headerLabel(name) {
+function looksLikeDateCell(value) {
+  return /^\d{4}-\d{2}-\d{2}/.test(String(value ?? ""));
+}
+
+function headerLabel(name, rows, index) {
+  if (name === "id") {
+    const sample = (rows || []).map((r) => r[index]).filter((v) => v !== "" && v != null).slice(0, 8);
+    if (sample.length && sample.every(looksLikeDateCell)) return "Дата";
+    return "Метод";
+  }
   return HEADER_LABELS[name] || String(name).replace(/_/g, " ");
 }
 
@@ -657,7 +681,7 @@ export function mapDisplayColumns(headers, rows) {
     return true;
   });
   const sourceIdx = headers.map((_, i) => i).filter((i) => keep[i]);
-  const outHeaders = sourceIdx.map((i) => headerLabel(headers[i]));
+  const outHeaders = sourceIdx.map((i) => headerLabel(headers[i], rows, i));
   const outRows = rows.map((row) =>
     sourceIdx.map((i) => formatCell(row[i], row, headers))
   );

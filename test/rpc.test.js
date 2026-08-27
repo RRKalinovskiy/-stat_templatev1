@@ -94,14 +94,14 @@ test("RPC period uses Moscow offset +03", () => {
   const vertical = params.Фильтр.d[1].d[2];
   const names = vertical.s.map((c) => c.n);
   const timeRec = vertical.d[names.indexOf("time")];
-  assert.equal(timeRec.f, 8);
-  assert.deepEqual(timeRec.d[0], ["day"]);
-  assert.equal(timeRec.d[1], "all_days");
+  assert.equal(timeRec.f, 7);
   const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
   assert.equal(ownerRec.f, 7);
   assert.deepEqual(ownerRec.d, []);
   const methodRec = vertical.d[names.indexOf("Метод_Метод")];
-  assert.equal(methodRec.f, 7);
+  assert.equal(methodRec.f, 8);
+  assert.deepEqual(methodRec.s.map((c) => c.n), ["Position", "Top"]);
+  assert.deepEqual(methodRec.d, [1, 100]);
   const charsAnalysis = params.Фильтр.d[1].d[9];
   assert.equal(charsAnalysis.f, 9);
   const errSlot = charsAnalysis.d[charsAnalysis.s.findIndex((c) => c.n === "Количество ошибок")];
@@ -140,6 +140,25 @@ test("empty filter template has no vertical slots", () => {
   assert.equal(params.Фильтр.d[0].d[1].d.length, 0);
   const vertical = params.Фильтр.d[1].d[2];
   assert.equal(vertical.d.length, 0);
+});
+
+test("time-series filter groups vertical by time, not method", () => {
+  const filter = {
+    cube: "Вызовы",
+    dimensions: [
+      { id: "Метод_Метод", isAggregated: false },
+      { id: "time", isTimeDim: true, isAggregated: true, mode: "all_days", timePeriod: { start: "00:00", end: "23:59" }, timeStep: "ten_minute", top: 100 }
+    ],
+    characteristics: [{ id: "Количество вызовов", order: "desc" }]
+  };
+  const params = buildGetReportParams(filter, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
+  const vertical = params.Фильтр.d[1].d[2];
+  const names = vertical.s.map((c) => c.n);
+  const timeRec = vertical.d[names.indexOf("time")];
+  assert.equal(timeRec.f, 8);
+  assert.deepEqual(timeRec.d[0], ["ten_minute"]);
+  const methodRec = vertical.d[names.indexOf("Метод_Метод")];
+  assert.equal(methodRec.f, 7);
 });
 
 test("period presets are sliding windows from now", () => {
@@ -289,9 +308,10 @@ test("custom cube filter maps empty values, excluded aliases, and object list", 
   const objectRow = dimRows.find((r) => r[0] === "Метод_Объект");
   assert.deepEqual(objectRow[3], ["Trigger", "Service"]);
   const timeRec = vertical.d[names.indexOf("time")];
-  assert.equal(timeRec.f, 8);
-  assert.deepEqual(timeRec.d[0], ["ten_minute"]);
-  assert.deepEqual(timeRec.d[2], ["00:00", "23:59"]);
+  assert.equal(timeRec.f, 7);
+  const methodRec = vertical.d[names.indexOf("Метод_Метод")];
+  assert.equal(methodRec.f, 8);
+  assert.deepEqual(methodRec.d, [1, 100]);
   const aliasRec = vertical.d[names.indexOf("Метод_МетодПсевдоним")];
   assert.equal(aliasRec.f, 7);
   const localRow = dimRows.find((r) => r[0] === "WEB-Сервис_Локальный стенд");
