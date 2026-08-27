@@ -85,6 +85,10 @@ html, body {
   color: var(--accent);
   word-break: break-all;
 }
+.hint code {
+  color: var(--text);
+  font-size: 11px;
+}
 
 .card, .stand-card, .filter-item {
   background: var(--card);
@@ -170,6 +174,14 @@ textarea {
 
 .row-actions { display: flex; gap: 8px; margin-top: 10px; }
 .dt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dt-grid[hidden] { display: none; }
+.period-modes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; }
+.period-btn { width: 100%; padding: 8px 6px; font-size: 12px; }
+.period-btn.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .msg { font-size: 12px; margin: 8px 0 0; }
 .msg.ok { color: var(--ok); }

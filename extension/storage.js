@@ -21,7 +21,7 @@ async function storeSet(obj) {
 }
 
 export async function loadState() {
-  const data = await storeGet(["stands", "filters", "device", "lastReport", "selectedFilterId", "selectedStandId"]);
+  const data = await storeGet(["stands", "filters", "device", "lastReport", "selectedFilterId", "selectedStandId", "periodMode"]);
   const stands = mergeStands(data.stands);
   if (JSON.stringify(stands) !== JSON.stringify(data.stands)) await storeSet({ stands });
   const filters = Array.isArray(data.filters) ? data.filters : [];
@@ -31,7 +31,8 @@ export async function loadState() {
     device: data.device || (await ensureDevice()),
     lastReport: data.lastReport || null,
     selectedFilterId: data.selectedFilterId || filters[0]?.id || "",
-    selectedStandId: data.selectedStandId || stands[0]?.id || ""
+    selectedStandId: data.selectedStandId || stands[0]?.id || "",
+    periodMode: data.periodMode === "72" || data.periodMode === "manual" ? data.periodMode : "24"
   };
 }
 
@@ -59,10 +60,11 @@ export async function saveLastReport(lastReport) {
   await storeSet({ lastReport });
 }
 
-export async function saveSelection({ selectedFilterId, selectedStandId }) {
+export async function saveSelection({ selectedFilterId, selectedStandId, periodMode }) {
   const patch = {};
   if (selectedFilterId !== undefined) patch.selectedFilterId = selectedFilterId;
   if (selectedStandId !== undefined) patch.selectedStandId = selectedStandId;
+  if (periodMode !== undefined) patch.periodMode = periodMode;
   if (Object.keys(patch).length) await storeSet(patch);
 }
 

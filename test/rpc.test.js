@@ -8,6 +8,7 @@ import {
   parseMoscowDateTimeLocal,
   toDateTimeLocalMoscow,
   periodFromFilter,
+  periodFromMode,
   parseReportTable,
   mapDisplayColumns,
   methodDisplayName,
@@ -15,7 +16,6 @@ import {
   reportFileName,
   extractSid,
   EMPTY_FILTER_TEMPLATE,
-  VERTICAL_DETAIL_FIELDS,
   authServiceUrl,
   reportServiceUrl,
   rpcCallUrl,
@@ -63,9 +63,9 @@ test("form period overrides filter JSON and drops time-dimension dates", () => {
   const start = parseMoscowDateTimeLocal("2026-08-20T00:00");
   const end = parseMoscowDateTimeLocal("2026-08-21T00:00");
   const params = buildGetReportParams(filter, start, end);
-  const period = params.Фильтр.d[0].d[7].d[0];
+  const period = params.Фильтр.d[0].d[6].d[0];
   assert.deepEqual(period, ["2026-08-20 00:00:00+03", "2026-08-21 00:00:00+03"]);
-  assert.equal(params.Фильтр.d[0].d[6], null);
+  assert.equal(params.Фильтр.d[0].s.map((c) => c.n).includes("idParent"), false);
   const dimRows = params.Фильтр.d[0].d[4].d;
   const timeRow = dimRows.find((r) => r[0] === "time");
   assert.equal(timeRow[3], null);
@@ -84,28 +84,32 @@ test("RPC period uses Moscow offset +03", () => {
   const start = new Date("2026-08-25T11:10:00.000Z");
   assert.equal(formatRpcDateTime(start), "2026-08-25 14:10:00+03");
   const params = buildGetReportParams(SAMPLE_FILTER, start, new Date("2026-08-26T11:10:00.000Z"));
-  const period = params.Фильтр.d[0].d[7].d[0];
+  const period = params.Фильтр.d[0].d[6].d[0];
   assert.deepEqual(period, ["2026-08-25 14:10:00+03", "2026-08-26 14:10:00+03"]);
   assert.equal(params.Навигация.d[2], 0);
   assert.equal(params.Навигация.d[1], 50);
+  const dimRows = params.Фильтр.d[0].d[4].d;
+  const ownerRow = dimRows.find((r) => r[0] === "Метод_Ответственный");
+  assert.ok(ownerRow[3].includes("Панов М.В."));
   const vertical = params.Фильтр.d[1].d[2];
   const names = vertical.s.map((c) => c.n);
+  const timeRec = vertical.d[names.indexOf("time")];
+  assert.equal(timeRec.f, 8);
+  assert.deepEqual(timeRec.d[0], ["day"]);
+  assert.equal(timeRec.d[1], "all_days");
   const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
-  assert.deepEqual(ownerRec.s[0].n, "Filter");
-  const filterValues = ownerRec.d[0];
-  assert.equal(Array.isArray(filterValues), true);
-  assert.equal(Array.isArray(filterValues[0]), false);
-  assert.equal(typeof filterValues[0], "string");
-  assert.ok(filterValues.includes("Панов М.В."));
-  assert.equal(ownerRec.s.some((c) => c.n === "Position"), false);
-  assert.equal(ownerRec.f, 9);
+  assert.equal(ownerRec.f, 7);
+  assert.deepEqual(ownerRec.d, []);
   const methodRec = vertical.d[names.indexOf("Метод_Метод")];
-  assert.deepEqual(methodRec.s.map((c) => c.n), ["Position", "Top"]);
-  assert.equal(methodRec.f, 8);
-  assert.deepEqual(methodRec.d, [1, 100]);
+  assert.equal(methodRec.f, 7);
+  const charsAnalysis = params.Фильтр.d[1].d[9];
+  assert.equal(charsAnalysis.f, 9);
+  const errSlot = charsAnalysis.d[charsAnalysis.s.findIndex((c) => c.n === "Количество ошибок")];
+  assert.equal(errSlot.f, 10);
+  assert.deepEqual(errSlot.d, [true]);
 });
 
-test("owner dimension with UI top:100 still sends Filter, not Position", () => {
+test("owner values stay in UI dimensions, vertical owner slot is empty", () => {
   const filter = {
     cube: "Вызовы",
     dimensions: [
@@ -120,23 +124,32 @@ test("owner dimension with UI top:100 still sends Filter, not Position", () => {
     characteristics: [{ id: "Количество ошибок", range: { start: 1 } }]
   };
   const params = buildGetReportParams(filter, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
+  const dimRows = params.Фильтр.d[0].d[4].d;
+  const ownerRow = dimRows.find((r) => r[0] === "Метод_Ответственный");
+  assert.deepEqual(ownerRow[3], ["Панов М.В.", "Гаврилов М.В."]);
   const vertical = params.Фильтр.d[1].d[2];
   const names = vertical.s.map((c) => c.n);
   const ownerRec = vertical.d[names.indexOf("Метод_Ответственный")];
-  assert.equal(ownerRec.s[0].n, "Filter");
-  assert.equal(ownerRec.s.some((c) => c.n === "Position"), false);
-  assert.equal(typeof ownerRec.d[0][0], "string");
-  assert.equal(ownerRec.f, 9);
+  assert.equal(ownerRec.f, 7);
 });
 
-test("empty filter template still uses the fixed vertical detail schema", () => {
+test("empty filter template has no vertical slots", () => {
   const params = buildGetReportParams(EMPTY_FILTER_TEMPLATE, new Date("2026-08-25T11:10:00.000Z"), new Date("2026-08-26T11:10:00.000Z"));
   assert.equal(params.Фильтр.d[0].d[3], "");
   assert.equal(params.Фильтр.d[0].d[4].d.length, 0);
   assert.equal(params.Фильтр.d[0].d[1].d.length, 0);
   const vertical = params.Фильтр.d[1].d[2];
-  assert.deepEqual(vertical.s.map((c) => c.n), VERTICAL_DETAIL_FIELDS);
-  assert.equal(vertical.d.length, VERTICAL_DETAIL_FIELDS.length);
+  assert.equal(vertical.d.length, 0);
+});
+
+test("period presets are sliding windows from now", () => {
+  const now = new Date("2026-08-27T06:50:00.000Z");
+  const h24 = periodFromMode("24", now);
+  const h72 = periodFromMode("72", now);
+  assert.equal(h24.end.toISOString(), now.toISOString());
+  assert.equal(h24.start.toISOString(), "2026-08-26T06:50:00.000Z");
+  assert.equal(h72.start.toISOString(), "2026-08-24T06:50:00.000Z");
+  assert.equal(periodFromMode("manual"), null);
 });
 
 test("numbers use space thousands separator", () => {
@@ -271,13 +284,16 @@ test("custom cube filter maps empty values, excluded aliases, and object list", 
   assert.equal(aliasRow[5], true);
   const vertical = params.Фильтр.d[1].d[2];
   const names = vertical.s.map((c) => c.n);
-  assert.deepEqual(names, VERTICAL_DETAIL_FIELDS);
-  assert.equal(names.includes("Метод_Объект"), false);
-  assert.equal(names.includes("WEB-Сервис_Локальный стенд"), false);
+  assert.ok(names.includes("Метод_Объект"));
+  assert.ok(names.includes("WEB-Сервис_Локальный стенд"));
   const objectRow = dimRows.find((r) => r[0] === "Метод_Объект");
   assert.deepEqual(objectRow[3], ["Trigger", "Service"]);
+  const timeRec = vertical.d[names.indexOf("time")];
+  assert.equal(timeRec.f, 8);
+  assert.deepEqual(timeRec.d[0], ["ten_minute"]);
+  assert.deepEqual(timeRec.d[2], ["00:00", "23:59"]);
   const aliasRec = vertical.d[names.indexOf("Метод_МетодПсевдоним")];
-  assert.equal(aliasRec.s.some((c) => c.n === "Excluded"), true);
+  assert.equal(aliasRec.f, 7);
   const localRow = dimRows.find((r) => r[0] === "WEB-Сервис_Локальный стенд");
   assert.deepEqual(localRow[3], ["0"]);
 });

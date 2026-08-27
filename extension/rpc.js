@@ -16,19 +16,6 @@ export const EMPTY_FILTER_TEMPLATE = {
   displayType: "Таблица"
 };
 
-/** Fixed schema of legacy «Вертикальная детализация» (record format 6). Extra dim ids from UI JSON must not be added — they cause ВОС. */
-export const VERTICAL_DETAIL_FIELDS = [
-  "WEB-Сервис_Приложение",
-  "WEB-Сервис_Семейство",
-  "WEB-Сервис_Сервис",
-  "WEB-Сервис_СистемноеИмя",
-  "time",
-  "БилдСервиса_БилдСервиса",
-  "Метод_Метод",
-  "Метод_МетодПсевдоним",
-  "Метод_Ответственный"
-];
-
 const TECHNICAL_HEADERS = /^(idParent|dimension|name\d+|label)$/i;
 const HEADER_LABELS = {
   id: "Метод",
@@ -107,6 +94,14 @@ export function toDateTimeLocalMoscow(date) {
   if (!date || Number.isNaN(date.getTime())) return "";
   const p = toMoscowParts(date);
   return `${p.y}-${p.m}-${p.d}T${p.h}:${p.min}`;
+}
+
+export function periodFromMode(mode, now = new Date()) {
+  if (mode === "24" || mode === "72") {
+    const hours = mode === "24" ? 24 : 72;
+    return { start: new Date(now.getTime() - hours * 3600 * 1000), end: now };
+  }
+  return null;
 }
 
 export function parsePeriodValue(value) {
@@ -254,36 +249,21 @@ function isTimeDimension(d) {
   return d.isTimeDim === true || d.id === "time";
 }
 
+function verticalTimeRecord(d) {
+  const step = d?.timeStep || "day";
+  const mode = d?.mode || "all_days";
+  const start = d?.timePeriod?.start || "00:00";
+  const end = d?.timePeriod?.end || "23:59";
+  return rec(8, [[String(step)], String(mode), [String(start), String(end)], 1], [
+    { t: { n: "Массив", t: "Строка" }, n: "Filter" },
+    { t: "Строка", n: "FilterDays" },
+    { t: { n: "Массив", t: "Строка" }, n: "FilterHours" },
+    { t: "Число целое", n: "Position" }
+  ]);
+}
+
 function verticalDimRecord(d, emptyRec) {
-  if (!d || isTimeDimension(d)) return emptyRec;
-  const values = normalizeDimValues(d.values);
-  const excluded = d.excluded === true;
-
-  // Filter dimensions (owners, aliases, …) use record format 9: Filter/Excluded only.
-  // UI JSON often has top: 100 on those dims; Position there makes the server
-  // parse the name list as Int64.
-  if (values || excluded) {
-    const fields = [];
-    const schema = [];
-    if (values) {
-      fields.push(values);
-      schema.push({ t: { n: "Массив", t: "Строка" }, n: "Filter" });
-    }
-    if (excluded) {
-      fields.push(true);
-      schema.push({ t: "Логическое", n: "Excluded" });
-    }
-    return rec(9, fields, schema);
-  }
-
-  if (d.isAggregated === true) {
-    const top = typeof d.top === "number" ? d.top : 100;
-    return rec(8, [1, top], [
-      { t: "Число целое", n: "Position" },
-      { t: "Число целое", n: "Top" }
-    ]);
-  }
-
+  if (isTimeDimension(d)) return verticalTimeRecord(d);
   return emptyRec;
 }
 
@@ -338,22 +318,19 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
   );
 
   const emptyRec = rec(7, [], []);
+  const verticalIds = dimensions.map((d) => d.id).filter(Boolean);
   const dimById = Object.fromEntries(dimensions.map((d) => [d.id, d]));
   const vertical = rec(
     6,
-    VERTICAL_DETAIL_FIELDS.map((id) => verticalDimRecord(dimById[id], emptyRec)),
-    VERTICAL_DETAIL_FIELDS.map((id) => ({ t: "Запись", n: id }))
+    verticalIds.map((id) => verticalDimRecord(dimById[id], emptyRec)),
+    verticalIds.map((id) => ({ t: "Запись", n: id }))
   );
 
   const charsAnalysis = rec(
-    10,
+    9,
     (f.characteristics || []).map((c) => {
-      if (c.range && (c.range.start != null || c.range.end != null)) {
-        return rec(11, [c.range.end ?? null, c.range.start ?? null, true], [
-          { t: "Число целое", n: "Higher" },
-          { t: "Число целое", n: "Lower" },
-          { t: "Логическое", n: "Top" }
-        ]);
+      if (c.order === "desc") {
+        return rec(10, [true], [{ t: "Логическое", n: "Top" }]);
       }
       return emptyRec;
     }),
@@ -369,7 +346,6 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       f.cube ?? "",
       rs(3, dimD, dimS),
       f.displayType ?? "Таблица",
-      null,
       periodRs,
       String(f.version ?? "1")
     ],
@@ -380,7 +356,6 @@ export function buildGetReportParams(filter, start, end, page = 0, pageSize = 50
       { t: "Строка", n: "cube" },
       { t: "Выборка", n: "dimensions" },
       { t: "Строка", n: "displayType" },
-      { t: "Строка", n: "idParent" },
       { t: "Выборка", n: "period" },
       { t: "Строка", n: "version" }
     ]

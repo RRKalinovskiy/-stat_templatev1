@@ -26,7 +26,8 @@
     </section>
 
     <section id="page-filters" class="page">
-      <p class="hint">Вставьте JSON фильтра из UI статистики. Расширение не подставляет свои измерения и характеристики — в RPC уходит то, что сохранено. Период при отчёте подменяется.</p>
+      <p class="hint">Фильтр копируется из UI статистики <b>один раз</b> и хранится здесь. На cloud за датами возвращаться не нужно — период задаётся на вкладке «Отчёт».</p>
+      <p class="hint">Формат: плоский JSON (<code>cube</code>, <code>dimensions</code>, <code>characteristics</code>, <code>displayType</code>). Без вложенных групп. Пример среза: метод + <code>time</code> с шагом 10 минут. Служебные поля дерева (<code>parent</code>, <code>node</code>) можно оставить — в RPC они не уходят.</p>
       <p class="hint">Ссылка на эталонный отчет: <a href="https://fix-go.saby.ru/sc3.NncKre" target="_blank" rel="noopener noreferrer">https://fix-go.saby.ru/sc3.NncKre</a></p>
       <form id="filter-form" class="card">
         <label>Название
@@ -45,7 +46,7 @@
     </section>
 
     <section id="page-report" class="page">
-      <p class="hint">Период берётся из полей ниже (время Москвы) и подменяет period в JSON. Смена фильтра подставляет период из сохранённого JSON — его можно изменить перед запросом.</p>
+      <p class="hint">Период считается в момент запроса (время Москвы). «24 часа» и «72 часа» — скользящее окно до текущего момента. «Вручную» — свои начало и конец.</p>
       <div class="card">
         <label>Стенд
           <select id="report-stand"></select>
@@ -53,7 +54,15 @@
         <label>Отчёт / фильтр
           <select id="report-filter"></select>
         </label>
-        <div class="dt-grid">
+        <label>Период
+          <div class="period-modes" role="group">
+            <button type="button" class="btn ghost period-btn" data-period="24">24 часа</button>
+            <button type="button" class="btn ghost period-btn" data-period="72">72 часа</button>
+            <button type="button" class="btn ghost period-btn" data-period="manual">вручную</button>
+          </div>
+        </label>
+        <p id="period-preview" class="hint"></p>
+        <div id="period-manual" class="dt-grid" hidden>
           <label>Начало
             <input id="report-start" type="datetime-local" />
           </label>

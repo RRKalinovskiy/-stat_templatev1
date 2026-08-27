@@ -1,19 +1,15 @@
 # Saby Stats Report
 
-Chrome MV3-расширение: отчёты статистики Saby по внутренним стендам.
+Chrome MV3-расширение: отчёты статистики Saby по стендам FIX / TEST / PRE-TEST.
 
-## Экраны
+**Смысл:** фильтр копируется из UI статистики один раз. Период (24 ч / 72 ч / вручную) задаётся в расширении. На cloud за новым JSON при смене дат ходить не нужно.
 
-1. **Стенды** — `fix-cloud.sbis.ru` / `test-cloud.sbis.ru` / `pre-test-cloud.sbis.ru`. Логин, пароль, синхронизация (`SAP.Authenticate` → `/auth/service/`). Cookies (`sid`) сохраняются в браузере.
-2. **Фильтры** — имя и JSON. При отчёте подменяется только `period`.
-3. **Отчёт** — фильтр, дата-время, `CommonStatistic.GetReport` → `/stats-cloud-interface/service/`, затем PDF.
-
-Запросы идут с `credentials: "include"` через текущее подключение (VPN / внутренний DNS).
+- [Инструкция пользователя](docs/instruction.md)
+- [Техническое задание](docs/requirements.md)
 
 ## Установка
 
-1. Chrome → `chrome://extensions` → режим разработчика.
-2. «Загрузить распакованное» → папка `extension/`.
+Chrome → `chrome://extensions` → режим разработчика → загрузить распакованное `extension/` → после обновления **Reload**.
 
 ## Проверка без стенда
 

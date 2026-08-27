@@ -1,5 +1,5 @@
 import { loadState, saveStands, saveFilters, saveLastReport, saveSelection } from "./storage.js";
-import { EMPTY_FILTER_TEMPLATE, methodDisplayName, reportFileName, parseMoscowDateTimeLocal, toDateTimeLocalMoscow, periodFromFilter, formatRpcDateTime } from "./rpc.js";
+import { EMPTY_FILTER_TEMPLATE, methodDisplayName, reportFileName, parseMoscowDateTimeLocal, toDateTimeLocalMoscow, periodFromMode, formatRpcDateTime } from "./rpc.js";
 import { syncStand, getReport } from "./api.js";
 import { tableToPdfBlob } from "./pdf.js";
 
@@ -16,7 +16,7 @@ async function callBg(msg) {
 
 const pages = document.querySelectorAll(".page");
 const tabs = document.querySelectorAll(".tab");
-let state = { stands: [], filters: [], lastReport: null };
+let state = { stands: [], filters: [], lastReport: null, periodMode: "24" };
 let lastTable = null;
 let editingFilterId = null;
 
@@ -132,21 +132,47 @@ function renderReportSelects() {
   if (lastTable?.rows?.length) download.hidden = false;
 }
 
-function fillPeriodFields(filterJson) {
-  const fromFilter = periodFromFilter(filterJson);
-  if (fromFilter) {
-    $("report-start").value = toDateTimeLocalMoscow(fromFilter.start);
-    $("report-end").value = toDateTimeLocalMoscow(fromFilter.end);
-    return;
-  }
-  defaultRange();
-}
-
 function defaultRange() {
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   $("report-start").value = toDateTimeLocalMoscow(start);
   $("report-end").value = toDateTimeLocalMoscow(end);
+}
+
+function periodMode() {
+  return state.periodMode === "72" || state.periodMode === "manual" ? state.periodMode : "24";
+}
+
+function applyPeriodModeUi() {
+  const mode = periodMode();
+  document.querySelectorAll(".period-btn").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.period === mode);
+  });
+  const manual = $("period-manual");
+  if (manual) manual.hidden = mode !== "manual";
+  updatePeriodPreview();
+}
+
+function updatePeriodPreview() {
+  const el = $("period-preview");
+  if (!el) return;
+  if (periodMode() === "manual") {
+    const start = parseMoscowDateTimeLocal($("report-start").value);
+    const end = parseMoscowDateTimeLocal($("report-end").value);
+    el.textContent = start && end ? `${formatRpcDateTime(start)} — ${formatRpcDateTime(end)}` : "Укажите начало и конец (Москва).";
+    return;
+  }
+  const hours = periodMode() === "72" ? 72 : 24;
+  el.textContent = `В запрос уйдёт скользящее окно за последние ${hours} ч. на момент нажатия «Получить отчёт».`;
+}
+
+function resolveReportPeriod() {
+  const preset = periodFromMode(periodMode());
+  if (preset) return preset;
+  return {
+    start: parseMoscowDateTimeLocal($("report-start").value),
+    end: parseMoscowDateTimeLocal($("report-end").value)
+  };
 }
 
 $("filter-form").addEventListener("submit", async (e) => {
@@ -197,8 +223,7 @@ $("btn-get-report").addEventListener("click", async () => {
     status.textContent = "Сохраните фильтр на вкладке «Фильтры»";
     return;
   }
-  const start = parseMoscowDateTimeLocal($("report-start").value);
-  const end = parseMoscowDateTimeLocal($("report-end").value);
+  const { start, end } = resolveReportPeriod();
   if (!start || !end) {
     status.className = "status err";
     status.textContent = "Укажите корректные дату и время";
@@ -284,9 +309,18 @@ async function init() {
   renderStands();
   renderFilters();
   renderReportSelects();
-  const selected = state.filters.find((f) => f.id === (state.selectedFilterId || $("report-filter").value));
-  if (selected) fillPeriodFields(selected.json);
-  else defaultRange();
+  defaultRange();
+  applyPeriodModeUi();
+  document.querySelectorAll(".period-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.periodMode = btn.dataset.period;
+      saveSelection({ periodMode: state.periodMode });
+      if (state.periodMode === "manual") defaultRange();
+      applyPeriodModeUi();
+    });
+  });
+  $("report-start")?.addEventListener("change", updatePeriodPreview);
+  $("report-end")?.addEventListener("change", updatePeriodPreview);
   $("report-stand").addEventListener("change", () => {
     state.selectedStandId = $("report-stand").value;
     saveSelection({ selectedStandId: state.selectedStandId });
@@ -294,8 +328,6 @@ async function init() {
   $("report-filter").addEventListener("change", () => {
     state.selectedFilterId = $("report-filter").value;
     saveSelection({ selectedFilterId: state.selectedFilterId });
-    const selected = state.filters.find((f) => f.id === state.selectedFilterId);
-    if (selected) fillPeriodFields(selected.json);
   });
   if (lastTable) {
     $("report-status").className = "status ok";
